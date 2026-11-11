@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Plain console test runner, no test framework packages needed. Run: dotnet run, project tests/Connascence.Tests -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <NeedsRoslyn>true</NeedsRoslyn>
+    <CopyRoslyn>true</CopyRoslyn>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Connascence.Core\Connascence.Core.csproj" />
+  </ItemGroup>
+</Project>

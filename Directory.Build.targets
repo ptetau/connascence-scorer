@@ -1,0 +1,29 @@
+<Project>
+  <!-- Projects that need Roslyn set NeedsRoslyn=true. -->
+  <PropertyGroup>
+    <SdkRoslynDir>$(NetCoreRoot)sdk/$(NETCoreSdkVersion)/Roslyn/bincore/</SdkRoslynDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(NeedsRoslyn)' == 'true' and '$(UseSdkRoslyn)' == 'true'">
+    <Reference Include="Microsoft.CodeAnalysis">
+      <HintPath>$(SdkRoslynDir)Microsoft.CodeAnalysis.dll</HintPath>
+      <Private>$(CopyRoslyn)</Private>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp">
+      <HintPath>$(SdkRoslynDir)Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+      <Private>$(CopyRoslyn)</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Offline builds of the netstandard analyzer also need the immutable collections that Roslyn uses. -->
+  <ItemGroup Condition="'$(NeedsRoslyn)' == 'true' and '$(UseSdkRoslyn)' == 'true' and $(TargetFramework.StartsWith('netstandard'))">
+    <Reference Include="System.Collections.Immutable">
+      <HintPath>$([System.IO.Directory]::GetDirectories('$(NetCoreRoot)packs/Microsoft.NETCore.App.Ref')[0])/ref/net8.0/System.Collections.Immutable.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(NeedsRoslyn)' == 'true' and '$(UseSdkRoslyn)' != 'true'">
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="$(RoslynVersion)" PrivateAssets="$(RoslynPrivateAssets)" />
+  </ItemGroup>
+</Project>

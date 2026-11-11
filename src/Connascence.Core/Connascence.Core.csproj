@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <NeedsRoslyn>true</NeedsRoslyn>
+    <CopyRoslyn>true</CopyRoslyn>
+    <RootNamespace>Connascence</RootNamespace>
+    <!-- Core source is also compiled into the Roslyn analyzer (netstandard2.0),
+         so keep to APIs that exist in netstandard2.0. -->
+  </PropertyGroup>
+</Project>

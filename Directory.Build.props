@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <RoslynVersion>4.8.0</RoslynVersion>
+    <!-- Set UseSdkRoslyn=true to build offline against the Roslyn DLLs that ship inside the .NET SDK
+         instead of pulling Microsoft.CodeAnalysis.CSharp from NuGet. -->
+    <UseSdkRoslyn Condition="'$(UseSdkRoslyn)' == ''">false</UseSdkRoslyn>
+  </PropertyGroup>
+</Project>

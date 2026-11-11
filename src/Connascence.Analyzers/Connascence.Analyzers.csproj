@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Roslyn analyzer. Shares the detector code with the CLI by compiling the Core sources directly,
+    so the package is a single DLL with no dependencies.
+    Analyzers must target netstandard2.0 to load in Visual Studio. AnalyzerTfm can be overridden for local testing.
+  -->
+  <PropertyGroup>
+    <AnalyzerTfm Condition="'$(AnalyzerTfm)' == ''">netstandard2.0</AnalyzerTfm>
+    <TargetFramework>$(AnalyzerTfm)</TargetFramework>
+    <NeedsRoslyn>true</NeedsRoslyn>
+    <CopyRoslyn>false</CopyRoslyn>
+    <RoslynPrivateAssets>all</RoslynPrivateAssets>
+    <RootNamespace>Connascence.Analyzers</RootNamespace>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <PackageId>Connascence.Analyzers</PackageId>
+    <Version>0.1.0</Version>
+    <Description>Build-time connascence warnings: magic values, positional parameters, copied logic, call-order rules, fixed waits, duplicated constants and shared mutable state.</Description>
+    <NoWarn>$(NoWarn);RS2008;RS1036</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Connascence.Core\Model.cs" Link="Core\Model.cs" />
+    <Compile Include="..\Connascence.Core\Settings.cs" Link="Core\Settings.cs" />
+    <Compile Include="..\Connascence.Core\Scoring.cs" Link="Core\Scoring.cs" />
+    <Compile Include="..\Connascence.Core\Text.cs" Link="Core\Text.cs" />
+    <Compile Include="..\Connascence.Core\Catalog.cs" Link="Core\Catalog.cs" />
+    <Compile Include="..\Connascence.Core\CSharp\*.cs" Link="Core\CSharp\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+  </ItemGroup>
+</Project>

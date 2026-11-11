@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Connascence.Cli</RootNamespace>
+    <AssemblyName>connascence</AssemblyName>
+    <Version>0.1.0</Version>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>connascence</ToolCommandName>
+    <PackageId>Connascence.Tool</PackageId>
+    <Description>Scores a codebase for connascence (coupling that costs when code changes) and suggests how to weaken it.</Description>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NeedsRoslyn>true</NeedsRoslyn>
+    <CopyRoslyn>true</CopyRoslyn>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Connascence.Core\Connascence.Core.csproj" />
+  </ItemGroup>
+</Project>
