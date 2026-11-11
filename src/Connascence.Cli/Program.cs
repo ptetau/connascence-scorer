@@ -114,7 +114,9 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
                 var set = new HashSet<string>(changed);
                 relevant = relevant.Where(f => f.Files.Any(set.Contains));
             }
-            var failing = relevant.Where(f => f.Cost >= maxCost && (f.Change == null || !f.Change.StartsWith("shrank"))).ToList();
+            // Only coupling that is new or grew fails. Moving places around at the same size (a refactor that removes one
+            // place and adds another) or shrinking it doesn't make it worse.
+            var failing = relevant.Where(f => f.Cost >= maxCost && (f.Change == null || f.Change == "new" || f.Change.StartsWith("grew"))).ToList();
             bool scoreFails = minScore > 0 && r.Summary.Score < minScore;
             bool pass = failing.Count == 0 && !scoreFails;
 

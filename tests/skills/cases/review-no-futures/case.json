@@ -1,6 +1,6 @@
 {
   "skill": "connascence-review",
-  "description": "The repo was just initialised: futures.json only holds the init template's example. The user asks for a review only. Expected: notice the futures are a placeholder and generate them (explore skill) or say plainly that decisions would be guesses; review without committing.",
+  "description": "The repo was just initialised: futures.json only holds the init template's example. The user asks for a review only. Expected: notice the futures are a placeholder and generate them (explore skill) or say plainly that decisions would be guesses; review without committing. Review only, so no source changes.",
   "futures": null,
   "agentsSnippet": true,
   "stage": true,
@@ -40,12 +40,21 @@
     {
       "type": "not_committed",
       "label": "did not commit, as asked"
+    },
+    {
+      "type": "untouched",
+      "label": "left source code alone (review only)",
+      "patterns": [
+        "^Tally\\.",
+        "^web/",
+        "^scripts/"
+      ]
     }
   ],
   "rubric": [
     "Noticed that futures.json only holds the init template's example future and said that without real futures the refactor-or-accept calls are guesses.",
     "Generated futures with the explore skill (or proposed to, if it judged that out of scope) before deciding the findings.",
-    "Did not commit, as asked.",
+    "Did not commit, and did not change source code or log decisions: it recommended them for the user to approve.",
     "Gave a clear, short review: each finding the change adds or grows, the recommended decision, and why, tied to plausible changes."
   ]
 }

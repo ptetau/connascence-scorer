@@ -1,0 +1,13 @@
+{
+  "description": "A change that removes one place from baseline coupling and adds another (same size, different places) is not worse, so it passes. Seen in a skill eval: the agent named a status code in Invoice.cs while adding a reminders endpoint, and the gate blocked it.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "replace": "Tally.Domain/Invoice.cs", "old": "public bool CanEdit() => Status == 1;", "new": "public const int Draft = 1;\n\n        public bool CanEdit() => Status == Draft;" },
+    { "write": "Tally.Api/Drafts.cs", "content": "namespace Tally.Api\n{\n    public class Drafts\n    {\n        public bool IsDraft(Tally.Domain.Invoice invoice) => invoice.Status == 1;\n    }\n}\n" },
+    { "stage": true },
+    { "label": "same degree, different places", "expectFinding": { "rule": "CNM01", "groupKey": "num|1|status", "degree": 4 } },
+    { "label": "check --staged passes", "run": ["check", "--staged"], "exit": 0, "lacks": ["Magic value 1"] }
+  ]
+}

@@ -35,7 +35,10 @@ namespace Connascence
 
                     var languages = other.Locations.Select(l => System.IO.Path.GetExtension(l.File).TrimStart('.')).Where(x => x.Length > 0).Distinct().ToList();
                     cs.Locations.AddRange(other.Locations);
+                    var before = cs.Degree;
                     cs.Degree += other.Degree;
+                    if (cs.ChangeProbe != null)
+                        cs.ChangeProbe = cs.ChangeProbe.Replace(Text.All(before, "place"), Text.All(cs.Degree, "place"));
                     cs.Cause += " The same value is also used " + Text.Spread(other.Locations) + " in " + Text.Join(languages) +
                                 " code, which the C# compiler never sees, so a missed place there fails only at run time.";
                     Scoring.Score(cs, settings);

@@ -59,7 +59,7 @@ Create `cases/<id>/case.json`:
 - `checks`: see the `c_*` methods in `run.py`. Types: `futures_valid`, `futures_sources`, `futures_mention`,
   `futures_absent`, `futures_touch_code`, `futures_preserved`, `future_likelihood`, `stable_mention`,
   `derived_parents`, `decision`, `no_decision`, `finding`, `gate_passes`, `committed`, `not_committed`,
-  `untouched`, `command_ran`, `skill_used`, `final_mentions`, `file_exists`, `owner_calls`, `any_of`
+  `untouched`, `files_committed`, `command_ran`, `skill_used`, `final_mentions`, `file_exists`, `owner_calls`, `any_of`
 - `rubric`: plain-language criteria for the judge
 
 Run `--dry-run` first to confirm the pending change trips the hook the way the case assumes.

@@ -52,7 +52,7 @@ Ask: "Which parts do you expect to stay put?" Offer what you found: generated co
 
 Turn the answers into futures:
 
-1. **Owner-stated futures** (`"source": "interview"`): one per likely axis or roadmap item. Likelihood: likely → high, maybe → medium.
+1. **Owner-stated futures** (`"source": "interview"`): one per likely axis or roadmap item. Likelihood: likely → high, maybe → medium, "not sure" → low (and say so in the description). Use only `high`, `medium` or `low`.
 2. **Derived futures** (`"source": "derived"`): the predictable sub-changes that come with each one. Examples:
    - Team use → accounts and roles, invitations, permissions checks, audit trail, per-user settings.
    - Multi-instance → no in-memory state, shared cache, idempotent background jobs, sticky-session removal.

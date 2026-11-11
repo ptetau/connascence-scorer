@@ -108,6 +108,14 @@
     {
       "type": "committed",
       "label": "committed, with the hook running"
+    },
+    {
+      "type": "files_committed",
+      "label": "committed the acceptance and decision log with the change",
+      "paths": [
+        ".connascence/accepted.json",
+        ".connascence/log/decisions.jsonl"
+      ]
     }
   ],
   "rubric": [

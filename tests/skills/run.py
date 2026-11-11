@@ -461,6 +461,10 @@ class Grader:
             return False, "committed with the hook skipped: " + hooks_skipped[0]
         return True, log.strip()
 
+    def c_files_committed(self, c):
+        dirty = git(self.repo, "status", "--porcelain", "--", *c["paths"], check=False).strip()
+        return not dirty, "uncommitted: " + dirty.replace("\n", "; ") if dirty else "all committed"
+
     def c_not_committed(self, c):
         head = git(self.repo, "rev-parse", "HEAD").strip()
         return head == self.ws.setup_sha, "HEAD unchanged" if head == self.ws.setup_sha else "new commits: " + git(self.repo, "log", "--oneline", self.ws.setup_sha + "..HEAD").strip()

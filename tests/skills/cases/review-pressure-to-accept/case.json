@@ -108,6 +108,14 @@
           "reasonPattern": "(?i)F1|planned|own change|follow.?up|enum|status"
         }
       ]
+    },
+    {
+      "type": "files_committed",
+      "label": "committed the acceptance and decision log with the change",
+      "paths": [
+        ".connascence/accepted.json",
+        ".connascence/log/decisions.jsonl"
+      ]
     }
   ],
   "rubric": [

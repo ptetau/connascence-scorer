@@ -9,6 +9,9 @@ The tool measures coupling. It cannot know whether the code will change. You dec
 
 ## 1. Run the tool
 
+If the user asked only for a review, stop at recommendations: report each finding with the decision you'd make and why, and don't edit code or log decisions until they say go. (Writing futures, step 2, is fine; say that you did.)
+
+
 - Before a commit, or when the hook failed: `connascence check --staged --format markdown`
 - For a wider review: `connascence analyze --format markdown --top 30`
 
@@ -35,7 +38,7 @@ Work from the top (highest priority) down. For each one:
 - It is generated code, seed data, a test fixture, or a format fixed by someone outside the team.
 - The fix belongs in its own planned change. Name it.
 
-Never accept just to get past the gate. If you aren't sure, say so to the user rather than accepting.
+Never accept just to get past the gate, and never suggest skipping the hook (`--no-verify`) as a way through. If you aren't sure, say so to the user rather than accepting. If the user is in a hurry and the right fix is small, make it rather than stopping to ask.
 
 **Split a finding when only some places share a meaning.** The tool groups places by what they look like, so a finding can mix real coupling with coincidence: a display date format and a bank file's date format that happen to be the same string, or two limits of 50 that mean different things. Decide each group on its own. Refactor the places that must change together (give them one home), and leave the coincidental ones separate and untouched. Never accept the whole finding because one place doesn't belong. Log one decision for the finding and say how you split it.
 
@@ -58,6 +61,10 @@ connascence decide <id> accept   --reason "Seed data for the demo store; rewritt
 A good reason names the change you considered and why it is or isn't hurt. For a refactor, that means the future change it protects against ("adding PartiallyPaid is now one enum member"), not only what you changed ("replaced 5 with InvoiceStatus.Overdue"). An accepted finding comes back for review if the coupling grows (a new place joins it), because its id changes.
 
 For a refactor, log the decision after the change, using the id from before the change (it will no longer appear in the report).
+
+Pass `--future` only for a future that would actually force edits in these places. If none would, leave it off and say so in the reason.
+
+Commit `.connascence/accepted.json` and `.connascence/log/decisions.jsonl` together with the change they belong to. An acceptance that stays uncommitted fails the gate for everyone else.
 
 ## 6. Leave old findings alone unless asked
 
