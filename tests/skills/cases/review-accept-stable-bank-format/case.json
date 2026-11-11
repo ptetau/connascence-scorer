@@ -1,0 +1,134 @@
+{
+  "skill": "connascence-review",
+  "description": "The staged change reads one more column by index from the bank statement CSV, growing positional coupling in BankFile. The futures file marks BankFile as stable: the layout is fixed by the bank. Expected: accept with a reason naming the external format, not a restructure.",
+  "futures": {
+    "product": "Tally",
+    "updated": "2026-10-01T00:00:00Z",
+    "futures": [
+      {
+        "id": "F1",
+        "title": "Invoice statuses grow (partially paid, viewed)",
+        "description": "Support asks every week for partially paid invoices. Each new status touches every status check.",
+        "likelihood": "high",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "Status"
+        ]
+      },
+      {
+        "id": "F2",
+        "title": "Australian customers: 10% GST and AUD",
+        "description": "First non-NZ market. Tax rate and currency per business.",
+        "likelihood": "high",
+        "horizon": "within a year",
+        "source": "interview",
+        "keywords": [
+          "Gst",
+          "NZD",
+          "Currency"
+        ],
+        "areas": [
+          "Tally.Billing/InvoiceService.cs"
+        ]
+      },
+      {
+        "id": "F3",
+        "title": "Stripe as a second payment provider",
+        "description": "Only if Windcave raises fees.",
+        "likelihood": "medium",
+        "horizon": "within a year",
+        "source": "interview",
+        "keywords": [
+          "PaymentGateway",
+          "Charge",
+          "Webhook"
+        ]
+      },
+      {
+        "id": "F4",
+        "title": "Accountant logins with read access",
+        "description": "Accountants see their clients' invoices.",
+        "likelihood": "medium",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "role",
+          "accountant"
+        ]
+      }
+    ],
+    "stable": [
+      {
+        "reason": "Bank file layouts (statement CSV and direct credit) are fixed by the bank's published spec",
+        "areas": [
+          "Tally.Billing/BankFile.cs"
+        ]
+      }
+    ]
+  },
+  "agentsSnippet": true,
+  "stage": true,
+  "edits": [
+    {
+      "file": "Tally.Billing/BankFile.cs",
+      "old": "        public string Reference { get; set; }\n    }",
+      "new": "        public string Reference { get; set; }\n        public string Particulars { get; set; }\n    }"
+    },
+    {
+      "file": "Tally.Billing/BankFile.cs",
+      "old": "                Reference = parts[4].Trim(),",
+      "new": "                Particulars = parts[3].Trim(),\n                Reference = parts[4].Trim(),"
+    }
+  ],
+  "prompt": "I've staged support for the Particulars column in bank statement imports. Commit it please.",
+  "checks": [
+    {
+      "type": "command_ran",
+      "label": "ran the connascence tool",
+      "pattern": "connascence (check|analyze)"
+    },
+    {
+      "type": "skill_used",
+      "label": "used the review skill",
+      "skill": "connascence-review"
+    },
+    {
+      "type": "decision",
+      "label": "accepted the bank-file positional coupling, citing the external format",
+      "choice": "accept",
+      "rule": "CNP03",
+      "reasonPattern": "(?i)bank|spec|format|external|stable"
+    },
+    {
+      "type": "no_decision",
+      "label": "did not log a refactor of it",
+      "choice": "refactor",
+      "rule": "CNP03"
+    },
+    {
+      "type": "gate_passes",
+      "label": "connascence check passes"
+    },
+    {
+      "type": "committed",
+      "label": "committed, with the hook running"
+    },
+    {
+      "type": "untouched",
+      "label": "no changes outside the bank file and connascence records",
+      "patterns": [
+        "^Tally\\.(Api|Domain)/",
+        "^scripts/",
+        "^web/",
+        "^Tally\\.Billing/(InvoiceService|PaymentGateway)\\.cs$"
+      ]
+    }
+  ],
+  "rubric": [
+    "Recognised that the coupling is to the bank's file layout, an external format the futures file marks as stable.",
+    "Accepted it with a reason that names that, rather than restructuring the parser to get past the gate. (A tiny clarity fix is fine if it explained why.)",
+    "Logged the decision with `connascence decide` and committed with the hook running.",
+    "Reported back briefly: the finding, the decision and the reason."
+  ]
+}

@@ -1,0 +1,108 @@
+{
+  "skill": "connascence-futures-interview",
+  "description": "An explore-generated futures file exists, including a multi-instance future the owner will reject. Expected: keep ids for futures that still apply, drop or downgrade the rejected one, raise Australia to high.",
+  "owner": "../interview-fresh/owner.md",
+  "futures": {
+    "product": "Tally",
+    "updated": "2026-08-01T00:00:00Z",
+    "futures": [
+      {
+        "id": "F1",
+        "title": "Invoice statuses grow",
+        "likelihood": "high",
+        "source": "explore",
+        "keywords": [
+          "Status"
+        ]
+      },
+      {
+        "id": "F2",
+        "title": "Run on more than one instance",
+        "description": "Static InvoiceCache would break behind a load balancer.",
+        "likelihood": "medium",
+        "source": "explore",
+        "keywords": [
+          "InvoiceCache"
+        ]
+      },
+      {
+        "id": "F3",
+        "title": "Australian GST and AUD",
+        "likelihood": "medium",
+        "source": "explore",
+        "keywords": [
+          "Gst",
+          "NZD"
+        ]
+      },
+      {
+        "id": "F4",
+        "title": "Second payment provider",
+        "likelihood": "medium",
+        "source": "explore",
+        "keywords": [
+          "PaymentGateway"
+        ]
+      }
+    ],
+    "stable": []
+  },
+  "prompt": "We already have explored futures in .connascence/futures.json. Run the connascence-futures-interview skill with me to correct them against my actual plans.",
+  "checks": [
+    {
+      "type": "owner_calls",
+      "label": "a short interview (2-7 exchanges)",
+      "min": 2,
+      "max": 7
+    },
+    {
+      "type": "futures_preserved",
+      "label": "ids kept for futures that still apply",
+      "futures": [
+        {
+          "id": "F1"
+        },
+        {
+          "id": "F3"
+        },
+        {
+          "id": "F4"
+        }
+      ]
+    },
+    {
+      "type": "future_likelihood",
+      "label": "multi-instance future dropped or low",
+      "id": "F2",
+      "allowed": [
+        "low"
+      ],
+      "removedOk": true
+    },
+    {
+      "type": "future_likelihood",
+      "label": "Australia raised to high",
+      "id": "F3",
+      "allowed": [
+        "high"
+      ]
+    },
+    {
+      "type": "futures_absent",
+      "label": "no new multi-instance future under another id",
+      "pattern": "(?i)multi-?instance|load.?balanc|more than one instance",
+      "allowLow": true
+    },
+    {
+      "type": "futures_valid",
+      "label": "well-formed futures",
+      "min": 4,
+      "max": 20
+    }
+  ],
+  "rubric": [
+    "Treated the existing file as a draft to refine and asked about it specifically, rather than starting over.",
+    "Kept ids for futures that still apply, so past decisions still point at the right future.",
+    "Dropped or downgraded the multi-instance future after the owner said no, and raised Australia to high."
+  ]
+}

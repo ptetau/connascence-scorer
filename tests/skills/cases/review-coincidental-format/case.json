@@ -1,0 +1,118 @@
+{
+  "skill": "connascence-review",
+  "description": "The staged change writes the dd/MM/yyyy display format a fourth time (a receipt email), growing CNA02. One of the existing places is BankFile parsing the bank's CSV, which only happens to use the same string. Expected: give the display format one home, and keep the bank's format separate.",
+  "futures": {
+    "product": "Tally",
+    "updated": "2026-10-01T00:00:00Z",
+    "futures": [
+      {
+        "id": "F1",
+        "title": "Invoice statuses grow (partially paid, viewed)",
+        "description": "Support asks every week for partially paid invoices. Each new status touches every status check.",
+        "likelihood": "high",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "Status"
+        ]
+      },
+      {
+        "id": "F2",
+        "title": "Australian customers: 10% GST and AUD",
+        "description": "First non-NZ market. Tax rate and currency per business.",
+        "likelihood": "high",
+        "horizon": "within a year",
+        "source": "interview",
+        "keywords": [
+          "Gst",
+          "NZD",
+          "Currency"
+        ],
+        "areas": [
+          "Tally.Billing/InvoiceService.cs"
+        ]
+      },
+      {
+        "id": "F3",
+        "title": "Stripe as a second payment provider",
+        "description": "Only if Windcave raises fees.",
+        "likelihood": "medium",
+        "horizon": "within a year",
+        "source": "interview",
+        "keywords": [
+          "PaymentGateway",
+          "Charge",
+          "Webhook"
+        ]
+      },
+      {
+        "id": "F4",
+        "title": "Accountant logins with read access",
+        "description": "Accountants see their clients' invoices.",
+        "likelihood": "medium",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "role",
+          "accountant"
+        ]
+      }
+    ],
+    "stable": [
+      {
+        "reason": "Bank file layouts (statement CSV and direct credit) are fixed by the bank's published spec",
+        "areas": [
+          "Tally.Billing/BankFile.cs"
+        ]
+      }
+    ]
+  },
+  "agentsSnippet": true,
+  "stage": true,
+  "edits": [
+    {
+      "file": "Tally.Billing/InvoiceService.cs",
+      "old": "        public void Schedule(Invoice invoice, DateTime when, int attempt, string channel)",
+      "new": "        public void SendReceipt(Invoice invoice, DateTime paidOn)\n        {\n            _mailer.Send(invoice.CustomerId, \"Receipt for \" + invoice.Reference + \", paid \" + paidOn.ToString(\"dd/MM/yyyy\"), attachPdf: false);\n        }\n\n        public void Schedule(Invoice invoice, DateTime when, int attempt, string channel)"
+    }
+  ],
+  "prompt": "I've staged a payment receipt email in InvoiceService. Please commit it.",
+  "checks": [
+    {
+      "type": "command_ran",
+      "label": "ran the connascence tool",
+      "pattern": "connascence (check|analyze)"
+    },
+    {
+      "type": "skill_used",
+      "label": "used the review skill",
+      "skill": "connascence-review"
+    },
+    {
+      "type": "decision",
+      "label": "logged a refactor of the date format",
+      "choice": "refactor",
+      "rule": "CNA02"
+    },
+    {
+      "type": "untouched",
+      "label": "left the bank statement parser alone",
+      "patterns": [
+        "^Tally\\.Billing/BankFile\\.cs$"
+      ]
+    },
+    {
+      "type": "gate_passes",
+      "label": "connascence check passes"
+    },
+    {
+      "type": "committed",
+      "label": "committed, with the hook running"
+    }
+  ],
+  "rubric": [
+    "Saw that BankFile.ParseStatementLine's \"dd/MM/yyyy\" is the bank's statement format, which only happens to match the display format, and kept the two apart (no shared constant across them).",
+    "Gave the display date format one home and used it in the new receipt and the existing display places (or explained a smaller choice).",
+    "Logged the decision, committed with the hook running, and reported back briefly."
+  ]
+}
