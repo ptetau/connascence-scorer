@@ -42,7 +42,7 @@ Fixes since the first run: the review skill splits mixed findings and names the 
 and explore skill tweaks; analyzer changes (near-copies, status codes 0-2, cross-language links, precise
 futures tagging).
 
-27 sessions, $17.10. Checks passed in 24; judge criteria passed in 104 of 108.
+27 sessions, $17.12. All checks passed in 23 runs; judge criteria passed in 111 of 114.
 
 - **review-coincidental-format: 3/3**, up from 0/1. The split-the-finding guidance works.
 - **review-pressure-to-accept: 1/3 committed.** One run stopped to ask the user and offered `--no-verify`.
