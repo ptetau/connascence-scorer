@@ -95,6 +95,7 @@ namespace Connascence.Cli
                 result.Warnings.AddRange(ctx.Warnings);
             }
             if (generic.Count > 0) result.Findings.AddRange(GenericEngine.Analyze(generic, settings));
+            if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings);
             result.CSharpFiles = csharp.Count;
             result.GenericFiles = generic.Count;
 

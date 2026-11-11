@@ -12,6 +12,6 @@
     { "commit": "reminders" },
     { "append": "Tally.Api/Reminders.cs", "text": "namespace Tally.Api { public class Chaser { public bool Chase(Tally.Domain.Invoice i) => i.Status == 3; } }\n" },
     { "stage": true },
-    { "label": "blocked again once a new place joins", "run": ["check", "--staged"], "exit": 1, "contains": ["grew from 6 to 8 places"] }
+    { "label": "blocked again once a new place joins", "run": ["check", "--staged"], "exit": 1, "contains": ["grew from 9 to 11 places"] }
   ]
 }

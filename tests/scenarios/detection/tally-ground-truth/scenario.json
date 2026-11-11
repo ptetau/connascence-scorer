@@ -111,11 +111,14 @@
       "why": "fixed retry delay in the Python job"
     },
     {
-      "rule": "GNM01",
+      "rule": "CNM01",
+      "groupKey": "num|3|status",
       "files": [
-        "web/invoice-list.js"
+        "web/invoice-list.js",
+        "scripts/overdue_report.py"
       ],
-      "why": "status codes compared in the web front end"
+      "minDegree": 9,
+      "why": "the web front end and the Python job compare the same status code; it joins the C# finding"
     },
     {
       "rule": "CNA01",
@@ -125,11 +128,14 @@
       "why": "GST calculation copied from InvoiceService.CalculateTotals into InvoicesController.Preview"
     },
     {
-      "rule": "GNM01",
+      "rule": "CNM01",
+      "groupKey": "num|5|status",
       "files": [
-        "scripts/overdue_report.py"
+        "scripts/overdue_report.py",
+        "web/invoice-list.js",
+        "Tally.Domain/Invoice.cs"
       ],
-      "why": "status 5 compared twice in the Python job"
+      "why": "status 5 in the Python job (row[\"status\"]), the JS and the C# is one coupling"
     },
     {
       "rule": "CNM01",

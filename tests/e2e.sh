@@ -44,7 +44,7 @@ namespace Shop.Web
 EOF
 git add -A
 if git commit -qm "returns" > /tmp/connascence-hook.out 2>&1; then cat /tmp/connascence-hook.out; fail "hook should have blocked the commit"; fi
-grep -q "grew from 3 to 5 places" /tmp/connascence-hook.out || { cat /tmp/connascence-hook.out; fail "expected 'grew' label"; }
+grep -q "grew from 5 to 7 places" /tmp/connascence-hook.out || { cat /tmp/connascence-hook.out; fail "expected 'grew' label"; }
 echo "blocked as expected"
 
 echo "== decide: accept one, refactor the other"

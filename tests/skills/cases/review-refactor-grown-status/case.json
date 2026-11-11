@@ -103,10 +103,10 @@
     },
     {
       "type": "finding",
-      "label": "status 3 no longer grows (6 places or fewer)",
+      "label": "status 3 no longer grows (9 places or fewer, its baseline across C#, Python and JS)",
       "rule": "CNM01",
       "groupKey": "num|3|status",
-      "maxDegree": 6
+      "maxDegree": 9
     },
     {
       "type": "gate_passes",
