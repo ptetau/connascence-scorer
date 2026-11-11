@@ -1,0 +1,5 @@
+{
+  "description": "A method that throws unless a setup method ran first is temporal coupling; constructor setup is not.",
+  "expect": [ { "rule": "CNE01", "titleContains": "Db.Open" } ],
+  "forbid": [ { "rule": "CNE01", "titleContains": "SafeDb" } ]
+}

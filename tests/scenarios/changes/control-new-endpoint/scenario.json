@@ -1,0 +1,8 @@
+{
+  "description": "Control: add a new 'find customer by email' endpoint. New code only; nothing existing has to change in step.",
+  "fixture": "tally",
+  "edits": [
+    { "file": "Tally.Api/CustomersController.cs", "old": "        public IEnumerable<Customer> All() => _customers.Values;\n", "new": "        public IEnumerable<Customer> All() => _customers.Values;\n\n        public Customer ByEmail(string email)\n        {\n            foreach (var c in _customers.Values) if (string.Equals(c.Email, email, StringComparison.OrdinalIgnoreCase)) return c;\n            return null;\n        }\n" }
+  ],
+  "expectNoPrediction": true
+}

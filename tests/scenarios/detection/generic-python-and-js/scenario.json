@@ -1,0 +1,67 @@
+{
+  "description": "Generic mode on Python and JavaScript: status codes, limits, flag arguments, long positional calls, fixed sleeps.",
+  "expect": [
+    {
+      "rule": "GNM01",
+      "lines": [
+        "worker/jobs.py:11",
+        "worker/jobs.py:19"
+      ],
+      "why": "status 7 compared twice in the worker"
+    },
+    {
+      "rule": "GNM01",
+      "files": [
+        "web/jobs.js"
+      ],
+      "why": "status 7 compared twice"
+    },
+    {
+      "rule": "GNV02",
+      "files": [
+        "web/jobs.js"
+      ],
+      "why": "attempts limit 5 checked twice"
+    },
+    {
+      "rule": "GNP01",
+      "titleContains": "export",
+      "why": "six parameters, called by position"
+    },
+    {
+      "rule": "GNT01",
+      "titleContains": "time.sleep(10)"
+    },
+    {
+      "rule": "GNT01",
+      "titleContains": "3000",
+      "why": "setTimeout with a fixed delay",
+      "gap": "Only sleep-style calls are recognised. A fixed setTimeout delay is the JavaScript version of the same guess."
+    },
+    {
+      "rule": "GNM01",
+      "files": [
+        "worker/jobs.py",
+        "web/jobs.js"
+      ],
+      "minDegree": 4,
+      "why": "status 7 means 'done' in both the worker and the web app: one finding links them"
+    },
+    {
+      "rule": "GNM01",
+      "lines": [
+        "worker/jobs.py:24"
+      ],
+      "why": "job[\"status\"] == 7 is the same status code",
+      "gap": "Dictionary access has no plain name before the operator, so it is skipped."
+    },
+    {
+      "rule": "GNM01",
+      "lines": [
+        "worker/jobs.py:14"
+      ],
+      "why": "job.status = 7 assigns the same code",
+      "gap": "Generic mode only collects comparisons, so assignments of a status code are not counted as places that must change."
+    }
+  ]
+}

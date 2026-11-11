@@ -1,0 +1,11 @@
+{
+  "description": "Emails and the API switch to ISO dates (yyyy-MM-dd). The bank statement parser must NOT change: it reads the bank's format, which only happens to be the same string.",
+  "fixture": "tally",
+  "edits": [
+    { "file": "Tally.Billing/InvoiceService.cs", "old": "invoice.Due.ToString(\"dd/MM/yyyy\")", "new": "invoice.Due.ToString(\"yyyy-MM-dd\")" },
+    { "file": "Tally.Api/InvoicesController.cs", "old": "invoice.Due.ToString(\"dd/MM/yyyy\")", "new": "invoice.Due.ToString(\"yyyy-MM-dd\")" }
+  ],
+  "predictedBy": [ { "rule": "CNA02", "titleContains": "dd/MM/yyyy", "why": "the display format is written out in both places" } ],
+  "filesCovered": [ { "files": ["Tally.Billing/InvoiceService.cs", "Tally.Api/InvoicesController.cs"] } ],
+  "notes": "The CNA02 finding also lists BankFile.ParseStatementLine, which did not change. That is coincidental equality, not coupling: the right fix splits the bank format from the display format. The review skill evals cover whether an agent notices."
+}

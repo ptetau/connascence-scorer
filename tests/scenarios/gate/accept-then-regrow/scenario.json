@@ -1,0 +1,17 @@
+{
+  "description": "Accepting a grown finding lets the commit through. When the coupling grows again, it comes back for review.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "write": "Tally.Api/Reminders.cs", "content": "namespace Tally.Api\n{\n    public class Reminders\n    {\n        public bool Due(Tally.Domain.Invoice invoice) => invoice.Status == 3;\n    }\n}\n" },
+    { "stage": true },
+    { "label": "blocked before the decision", "run": ["check", "--staged"], "exit": 1 },
+    { "label": "accept with a reason", "decide": "accept", "finding": { "rule": "CNM01", "groupKey": "num|3|status" }, "reason": "Status enum migration is planned as its own change (F1)", "future": "F1" },
+    { "label": "passes after acceptance", "run": ["check", "--staged"], "exit": 0 },
+    { "commit": "reminders" },
+    { "append": "Tally.Api/Reminders.cs", "text": "namespace Tally.Api { public class Chaser { public bool Chase(Tally.Domain.Invoice i) => i.Status == 3; } }\n" },
+    { "stage": true },
+    { "label": "blocked again once a new place joins", "run": ["check", "--staged"], "exit": 1, "contains": ["grew from 6 to 8 places"] }
+  ]
+}

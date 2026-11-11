@@ -1,0 +1,11 @@
+{
+  "description": "Inline accept comments mark findings as accepted, on the line or the line above. Generated and designer files are skipped.",
+  "expect": [
+    { "rule": "CNP03", "accepted": true, "why": "comment above one of the indexed reads" },
+    { "rule": "CNT01", "accepted": true, "why": "comment on the same line" }
+  ],
+  "forbid": [
+    { "anyFile": ["App/Generated/Client.g.cs"] },
+    { "anyFile": ["App/Form.Designer.cs"] }
+  ]
+}

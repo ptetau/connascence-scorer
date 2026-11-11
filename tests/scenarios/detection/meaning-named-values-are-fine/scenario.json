@@ -1,0 +1,5 @@
+{
+  "description": "Code that already uses an enum and a named constant has nothing to report.",
+  "forbid": [ { "rule": "CNM01" }, { "rule": "CNV01" } ],
+  "maxFindings": 0
+}

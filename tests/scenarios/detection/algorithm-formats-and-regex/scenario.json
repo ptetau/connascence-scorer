@@ -1,0 +1,8 @@
+{
+  "description": "A writer and a reader that must agree on a date format and a regex.",
+  "expect": [
+    { "rule": "CNA02", "titleContains": "yyyyMMdd-HHmm", "degree": 2, "why": "written by Stamp, parsed by Parse" },
+    { "rule": "CNA02", "titleContains": "[A-Z]{3}", "degree": 2, "why": "same SKU pattern in two types" }
+  ],
+  "forbid": [ { "rule": "CNA02", "titleContains": "\"D\"", "why": "a standard format used once" } ]
+}

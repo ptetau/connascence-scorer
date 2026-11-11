@@ -1,0 +1,21 @@
+{
+  "description": "The API moves to two instances behind a load balancer. The static InvoiceCache has to become an injected shared store, so every place that touches it changes.",
+  "fixture": "tally",
+  "futures": {
+    "product": "Tally",
+    "futures": [
+      { "id": "F1", "title": "Invoice statuses grow", "likelihood": "medium", "source": "explore", "keywords": ["Status"] },
+      { "id": "F2", "title": "Run the API on more than one instance", "likelihood": "high", "source": "explore", "areas": ["Tally.Api/**"], "keywords": ["InvoiceCache"] }
+    ]
+  },
+  "edits": [
+    { "file": "Tally.Billing/InvoiceCache.cs", "old": "    public static class InvoiceCache\n    {\n        public static Dictionary<string, Invoice> Items = new Dictionary<string, Invoice>();\n    }", "new": "    public interface IInvoiceStore\n    {\n        Invoice Get(string id);\n        void Put(Invoice invoice);\n        IEnumerable<Invoice> All();\n    }" },
+    { "file": "Tally.Billing/InvoiceService.cs", "old": "InvoiceCache.Items[invoice.Id] = invoice;", "new": "_store.Put(invoice);" },
+    { "file": "Tally.Api/InvoicesController.cs", "old": "InvoiceCache.Items.Values", "new": "_store.All()" },
+    { "file": "Tally.Api/InvoicesController.cs", "old": "InvoiceCache.Items[id]", "new": "_store.Get(id)" },
+    { "file": "Tally.Api/WebhookController.cs", "old": "InvoiceCache.Items[invoiceId]", "new": "_store.Get(invoiceId)" }
+  ],
+  "predictedBy": [ { "rule": "CNI01", "titleContains": "InvoiceCache.Items" } ],
+  "filesCovered": [ { "files": ["Tally.Billing/InvoiceCache.cs", "Tally.Billing/InvoiceService.cs", "Tally.Api/InvoicesController.cs", "Tally.Api/WebhookController.cs"] } ],
+  "rank": { "top": 1, "finding": { "rule": "CNI01", "titleContains": "InvoiceCache.Items" } }
+}

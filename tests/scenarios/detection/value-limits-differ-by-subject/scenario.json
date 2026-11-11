@@ -1,0 +1,5 @@
+{
+  "description": "The same number checked against different things is coincidence, not coupling. The same number against the same thing is.",
+  "forbid": [ { "rule": "CNV02", "groupKeyStartsWith": "limit|64|", "why": "Length and Count are different limits" } ],
+  "expect": [ { "rule": "CNV02", "groupKey": "limit|18|age", "degree": 2, "why": "the adult age is one rule" } ]
+}

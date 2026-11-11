@@ -1,0 +1,12 @@
+{
+  "description": "Positional coupling is flagged where look-alike arguments can be swapped silently, and not otherwise.",
+  "expect": [
+    { "rule": "CNP01", "titleContains": "Transfer", "why": "three strings in a row, called by position" },
+    { "rule": "CNP02", "titleContains": "Name", "why": "3-part tuple of strings unpacked by position" }
+  ],
+  "forbid": [
+    { "rule": "CNP01", "titleContains": "Book", "why": "four parameters of four different types: the compiler catches a swap" },
+    { "rule": "CNP01", "titleContains": "Refund", "why": "every call names its arguments" },
+    { "rule": "CNP02", "titleContains": "Range", "why": "two-part tuples are below the threshold" }
+  ]
+}
