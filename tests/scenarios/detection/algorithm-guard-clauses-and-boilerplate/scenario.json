@@ -1,0 +1,7 @@
+{
+  "description": "Near-copy detection must not mistake look-alike guard clauses, or methods that share a shape but call different things, for copied logic.",
+  "forbid": [
+    { "rule": "CNA01", "members": ["Place", "Book"], "why": "five parameter guards normalise to one repeated statement; that is a convention, not a copied rule" },
+    { "rule": "CNA01", "members": ["A", "B"], "why": "same shape, different calls" }
+  ]
+}

@@ -122,8 +122,7 @@
       "anyFile": [
         "Tally.Api/InvoicesController.cs"
       ],
-      "why": "GST calculation copied from InvoiceService.CalculateTotals into InvoicesController.Preview",
-      "gap": "CNA01 only matches whole method bodies that are token-for-token identical. Preview copies the first seven statements of CalculateTotals but returns an array instead of a tuple, so the copy is missed."
+      "why": "GST calculation copied from InvoiceService.CalculateTotals into InvoicesController.Preview"
     },
     {
       "rule": "GNM01",
@@ -136,8 +135,7 @@
     {
       "rule": "CNM01",
       "groupKey": "num|1|status",
-      "why": "status 1 means 'draft', compared and assigned in several places",
-      "gap": "1 is on the ignored-number list (with 0, -1, 2, 100...), so status codes 1 and 2 are invisible even when the subject is clearly a code."
+      "why": "status 1 means 'draft', compared and assigned in several places"
     }
   ],
   "forbid": [

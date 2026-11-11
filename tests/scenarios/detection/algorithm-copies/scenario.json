@@ -16,8 +16,7 @@
         "Bonus",
         "BonusFor"
       ],
-      "why": "Bonus copied with the variables renamed",
-      "gap": "Copies are matched on exact tokens, so renaming locals hides the copy. Normalising identifiers (or comparing the syntax shape) would catch it."
+      "why": "Bonus copied with the variables renamed"
     }
   ],
   "forbid": [

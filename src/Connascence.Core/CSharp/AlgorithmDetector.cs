@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -27,56 +28,219 @@ namespace Connascence.CSharp
             return DuplicateBodies(ctx).Concat(SharedFormats(ctx)).Concat(Crypto(ctx));
         }
 
+        sealed class Body
+        {
+            public BlockSyntax Block;
+            public List<StatementSyntax> Statements;
+            public List<string> Keys;     // one normalised key per top-level statement
+            public int[] Weight;          // statements inside each top-level statement, blocks not counted
+        }
+
+        sealed class Occurrence
+        {
+            public Body Body;
+            public int Start;
+            public int Length;
+        }
+
+        /// <summary>
+        /// Finds the same run of statements in two or more members. Local and parameter names are normalised,
+        /// so a copy with renamed variables still matches, and the copy may be part of a larger method
+        /// (copied, then tweaked at the end). Whole identical bodies are the special case where the run is everything.
+        /// </summary>
         IEnumerable<Finding> DuplicateBodies(CSharpContext ctx)
         {
             var min = ctx.Settings.MinDuplicateStatements;
-            var groups = new Dictionary<string, List<SyntaxNode>>();
+            var bodies = new List<Body>();
             foreach (var root in ctx.Roots)
             {
-                foreach (var body in root.DescendantNodes().OfType<BlockSyntax>())
+                foreach (var block in root.DescendantNodes().OfType<BlockSyntax>())
                 {
                     // Only whole bodies of members, local functions and lambdas: avoids reporting every nested block twice.
-                    var p = body.Parent;
+                    var p = block.Parent;
                     if (!(p is BaseMethodDeclarationSyntax || p is AccessorDeclarationSyntax || p is LocalFunctionStatementSyntax ||
                           p is AnonymousFunctionExpressionSyntax)) continue;
-                    var statements = body.DescendantNodes().OfType<StatementSyntax>().Count(st => !(st is BlockSyntax));
-                    if (statements < min) continue;
-                    var key = Normalise(body);
-                    List<SyntaxNode> list;
-                    if (!groups.TryGetValue(key, out list)) { list = new List<SyntaxNode>(); groups[key] = list; }
-                    list.Add(body);
+                    var total = block.DescendantNodes().OfType<StatementSyntax>().Count(st => !(st is BlockSyntax));
+                    if (total < min) continue;
+                    var locals = LocalNames(block);
+                    var stmts = block.Statements.ToList();
+                    bodies.Add(new Body
+                    {
+                        Block = block,
+                        Statements = stmts,
+                        Keys = stmts.Select(st => Normalise(st, locals)).ToList(),
+                        Weight = stmts.Select(st => st.DescendantNodesAndSelf().OfType<StatementSyntax>().Count(x => !(x is BlockSyntax))).ToArray(),
+                    });
                 }
             }
 
-            foreach (var kv in groups.Where(g => g.Value.Count >= 2))
+            // Candidate pairs: bodies that share a run of three statements (or a whole short body). Very common runs are boilerplate.
+            const int gram = 3;
+            var index = new Dictionary<string, List<int>>();
+            for (int b = 0; b < bodies.Count; b++)
             {
-                var bodies = kv.Value;
-                var locs = bodies.Select(b => ctx.Locate(b.Parent is BaseMethodDeclarationSyntax || b.Parent is LocalFunctionStatementSyntax ? b.Parent.GetFirstToken() : b.GetFirstToken(), "copy")).ToList();
-                for (int i = 0; i < bodies.Count; i++) locs[i].EndLine = bodies[i].GetLocation().GetLineSpan().EndLinePosition.Line + 1;
-                var n = bodies[0].DescendantNodes().OfType<StatementSyntax>().Count(st => !(st is BlockSyntax));
+                var keys = bodies[b].Keys;
+                var seen = new HashSet<string>();
+                for (int i = 0; i + Math.Min(gram, keys.Count) <= keys.Count; i++)
+                {
+                    var g = string.Join("\n", keys.Skip(i).Take(Math.Min(gram, keys.Count)));
+                    if (!seen.Add(g)) continue;
+                    List<int> list;
+                    if (!index.TryGetValue(g, out list)) { list = new List<int>(); index[g] = list; }
+                    list.Add(b);
+                }
+            }
+            var pairs = new HashSet<(int, int)>();
+            foreach (var list in index.Values)
+            {
+                if (list.Count < 2 || list.Count > 50) continue;
+                for (int i = 0; i < list.Count; i++)
+                    for (int j = i + 1; j < list.Count; j++)
+                        pairs.Add((list[i], list[j]));
+            }
+
+            // For each pair, the longest common run of statements, kept if it holds enough statements.
+            var groups = new Dictionary<string, List<Occurrence>>();
+            foreach (var (a, b) in pairs.OrderBy(x => x.Item1).ThenBy(x => x.Item2))
+            {
+                if (Overlaps(bodies[a].Block, bodies[b].Block)) continue;   // a lambda inside the method it is compared with
+                int ai, bi, len;
+                LongestRun(bodies[a].Keys, bodies[b].Keys, out ai, out bi, out len);
+                if (len == 0) continue;
+                // Count each distinct statement once, so a run of look-alike guard clauses (if ($ == null) throw ...) isn't a "copy".
+                var weight = 0;
+                var counted = new HashSet<string>();
+                for (int k = 0; k < len; k++) if (counted.Add(bodies[a].Keys[ai + k])) weight += bodies[a].Weight[ai + k];
+                if (weight < min) continue;
+                var key = string.Join("\n", bodies[a].Keys.Skip(ai).Take(len));
+                List<Occurrence> occ;
+                if (!groups.TryGetValue(key, out occ)) { occ = new List<Occurrence>(); groups[key] = occ; }
+                if (!occ.Any(o => o.Body == bodies[a])) occ.Add(new Occurrence { Body = bodies[a], Start = ai, Length = len });
+                if (!occ.Any(o => o.Body == bodies[b])) occ.Add(new Occurrence { Body = bodies[b], Start = bi, Length = len });
+            }
+
+            foreach (var kv in groups)
+            {
+                var occ = kv.Value.OrderBy(o => o.Body.Block.SyntaxTree.FilePath, StringComparer.Ordinal).ThenBy(o => o.Body.Block.SpanStart).ToList();
+                bool whole = occ.All(o => o.Start == 0 && o.Length == o.Body.Statements.Count);
+                var locs = new List<CodeLocation>();
+                foreach (var o in occ)
+                {
+                    CodeLocation loc;
+                    int endLine;
+                    var parent = o.Body.Block.Parent;
+                    if (o.Start == 0 && o.Length == o.Body.Statements.Count)
+                    {
+                        loc = ctx.Locate(parent is BaseMethodDeclarationSyntax || parent is LocalFunctionStatementSyntax ? parent.GetFirstToken() : o.Body.Block.GetFirstToken(), "copy");
+                        endLine = o.Body.Block.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
+                    }
+                    else
+                    {
+                        loc = ctx.Locate(o.Body.Statements[o.Start], "copy");
+                        endLine = o.Body.Statements[o.Start + o.Length - 1].GetLocation().GetLineSpan().EndLinePosition.Line + 1;
+                    }
+                    loc.EndLine = endLine;
+                    locs.Add(loc);
+                }
+                var first = occ[0];
+                var n = 0;
+                for (int k = 0; k < first.Length; k++) n += first.Body.Weight[first.Start + k];
+                var renamed = occ.Select(o => string.Join("\n", o.Body.Statements.Skip(o.Start).Take(o.Length).Select(st => Normalise(st, null)))).Distinct().Count() > 1;
                 yield return new Finding
                 {
                     RuleId = "CNA01",
                     Kind = Kind.Algorithm,
-                    Title = "Same logic copied " + bodies.Count + " times",
+                    Title = "Same logic copied " + occ.Count + " times",
                     GroupKey = Text.StableHash(kv.Key),
                     Locations = locs,
-                    Degree = bodies.Count,
-                    Cause = "The same " + n + "-statement body appears " + Text.Spread(locs) + " (" + Text.Members(locs) +
-                            "). If the rule it encodes changes, every copy must change the same way.",
-                    Suggestion = "Move the logic into one method, owned by the concept it belongs to, and call it from each place.",
+                    Degree = occ.Count,
+                    Cause = (whole
+                                ? "The same " + n + "-statement body appears "
+                                : "The same run of " + n + " statements appears ") + Text.Spread(locs) + " (" + Text.Members(locs) + ")" +
+                            (whole ? "" : ", inside methods that otherwise differ") +
+                            (renamed ? ", with the variables renamed" : "") +
+                            ". If the rule it encodes changes, every copy must change the same way.",
+                    Suggestion = whole
+                        ? "Move the logic into one method, owned by the concept it belongs to, and call it from each place."
+                        : "Extract the shared statements into one method, owned by the concept they belong to, and call it from each place. Keep the parts that differ where they are.",
                     ChangeProbe = "If this rule changes (a bug fix, a new case, a policy tweak), will every copy be found and fixed? Is the rule likely to change?",
                 };
             }
         }
 
-        static string Normalise(SyntaxNode node)
+        static bool Overlaps(SyntaxNode a, SyntaxNode b) => a.SyntaxTree == b.SyntaxTree && a.Span.IntersectsWith(b.Span);
+
+        /// <summary>Longest run of equal keys shared by two lists (classic dynamic programming; bodies are short).</summary>
+        static void LongestRun(List<string> a, List<string> b, out int aStart, out int bStart, out int length)
+        {
+            aStart = bStart = length = 0;
+            var prev = new int[b.Count + 1];
+            for (int i = 1; i <= a.Count; i++)
+            {
+                var cur = new int[b.Count + 1];
+                for (int j = 1; j <= b.Count; j++)
+                {
+                    if (a[i - 1] != b[j - 1]) continue;
+                    cur[j] = prev[j - 1] + 1;
+                    if (cur[j] > length) { length = cur[j]; aStart = i - length; bStart = j - length; }
+                }
+                prev = cur;
+            }
+        }
+
+        /// <summary>Names of parameters and locals declared in or for this body. These are renamed freely when code is copied.</summary>
+        static HashSet<string> LocalNames(BlockSyntax block)
+        {
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            ParameterListSyntax pars = null;
+            switch (block.Parent)
+            {
+                case BaseMethodDeclarationSyntax m: pars = m.ParameterList; break;
+                case LocalFunctionStatementSyntax lf: pars = lf.ParameterList; break;
+                case ParenthesizedLambdaExpressionSyntax pl: pars = pl.ParameterList; break;
+                case AnonymousMethodExpressionSyntax am: pars = am.ParameterList; break;
+                case SimpleLambdaExpressionSyntax sl: names.Add(sl.Parameter.Identifier.Text); break;
+                case AccessorDeclarationSyntax _: names.Add("value"); break;
+            }
+            if (pars != null) foreach (var p in pars.Parameters) names.Add(p.Identifier.Text);
+            foreach (var n in block.DescendantNodes())
+            {
+                switch (n)
+                {
+                    case VariableDeclaratorSyntax v: names.Add(v.Identifier.Text); break;
+                    case ForEachStatementSyntax f: names.Add(f.Identifier.Text); break;
+                    case SingleVariableDesignationSyntax d: names.Add(d.Identifier.Text); break;
+                    case CatchDeclarationSyntax c when c.Identifier.Text.Length > 0: names.Add(c.Identifier.Text); break;
+                    case ParameterSyntax p: names.Add(p.Identifier.Text); break;
+                }
+            }
+            return names;
+        }
+
+        /// <summary>Token text of a statement, with local and parameter names replaced by a placeholder (when locals is given).</summary>
+        static string Normalise(SyntaxNode node, HashSet<string> locals)
         {
             var sb = new StringBuilder();
-            foreach (var t in node.DescendantTokens()) { sb.Append(t.Text); sb.Append(' '); }
+            foreach (var t in node.DescendantTokens())
+            {
+                if (locals != null && t.IsKind(SyntaxKind.IdentifierToken) && locals.Contains(t.Text) && !IsMemberName(t))
+                    sb.Append('$');
+                else
+                    sb.Append(t.Text);
+                sb.Append(' ');
+            }
             return sb.ToString();
         }
 
+        /// <summary>True for the Name in x.Name (a member, not a local that happens to share its name).</summary>
+        static bool IsMemberName(SyntaxToken t)
+        {
+            var id = t.Parent as SimpleNameSyntax;
+            if (id == null) return false;
+            var ma = id.Parent as MemberAccessExpressionSyntax;
+            return (ma != null && ma.Name == id) || id.Parent is MemberBindingExpressionSyntax || id.Parent is NameColonSyntax ||
+                   (id.Parent is AssignmentExpressionSyntax asg && asg.Left == id && asg.Parent is InitializerExpressionSyntax);
+        }
 
         IEnumerable<Finding> SharedFormats(CSharpContext ctx)
         {

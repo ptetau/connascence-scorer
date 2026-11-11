@@ -47,12 +47,14 @@ namespace Connascence.CSharp
                     if (!isNumber && !isString) continue;
 
                     var value = isNumber ? NumberText(lit) : lit.Token.ValueText;
-                    if (isNumber && ignored.Contains(value)) continue;
+                    // 0, 1, 2... are usually just numbers. Compared with or assigned to a code (Status == 1) they are a meaning like any other.
+                    bool common = isNumber && ignored.Contains(value);
                     if (isString && value.Length == 0) continue;
                     if (IsNamedConstantDefinition(lit)) continue;
 
                     var hit = Classify(ctx, lit);
                     if (hit == null) continue;
+                    if (common && !(IsCodeLike(hit.Subject, codeLike) && (hit.Use == Use.Equality || hit.Use == Use.Switch || hit.Use == Use.Assignment))) continue;
                     if (isNumber && hit.Use == Use.Indexer) continue;      // arr[3] is handled by the position detector
                     if (isNumber && hit.Use == Use.Argument) continue;    // too noisy without knowing the parameter's role
                     if (isString && hit.Use == Use.Argument && !IsCodeLike(hit.Subject, codeLike)) continue;
@@ -75,6 +77,7 @@ namespace Connascence.CSharp
                 bool isLimit = kv.Key.StartsWith("limit|");
                 bool codeSubject = IsCodeLike(first.Subject, codeLike);
                 if (hits.Count < 2 && !(codeSubject && !isLimit)) continue;
+                if (hits.Count < 2 && first.Literal.IsKind(SyntaxKind.NumericLiteralExpression) && ignored.Contains(NumberText(first.Literal))) continue;
 
                 var locs = hits.Select(h => ctx.Locate(h.Literal, "use")).ToList();
                 var value = isString ? "\"" + Text.Quote(first.Literal.Token.ValueText) + "\"" : NumberText(first.Literal);
