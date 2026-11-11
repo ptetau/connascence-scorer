@@ -33,8 +33,12 @@ namespace Connascence.Generic
 
         const string Literal = @"-?\d+(?:\.\d+)?|""[^""\n]*""|'[^'\n]*'";
         const string Op = @"===|!==|==|!=|<=|>=|<|>";
-        static readonly Regex SubjectThenLiteral = new Regex(@"(?<subject>[A-Za-z_$][\w.$]*)\s*(?<op>" + Op + @")\s*(?<lit>" + Literal + @")(?![\w.])");
-        static readonly Regex LiteralThenSubject = new Regex(@"(?<![\w.])(?<lit>" + Literal + @")\s*(?<op>" + Op + @")\s*(?<subject>[A-Za-z_$][\w.$]*)");
+        // A subject is a name (order.status) or a keyed lookup (row["status"], row['status']).
+        const string Subject = @"(?<subject>[A-Za-z_$][\w.$]*(?:\[\s*[""'][\w$-]+[""']\s*\])?)";
+        static readonly Regex SubjectThenLiteral = new Regex(Subject + @"\s*(?<op>" + Op + @")\s*(?<lit>" + Literal + @")(?![\w.])");
+        static readonly Regex LiteralThenSubject = new Regex(@"(?<![\w.])(?<lit>" + Literal + @")\s*(?<op>" + Op + @")\s*" + Subject);
+        static readonly Regex Assignment = new Regex(Subject + @"\s*(?<op>=)(?!=)\s*(?<lit>" + Literal + @")\s*[;,)]?\s*(?:#.*|//.*)?$");
+        static readonly Regex TimerCall = new Regex(@"\b(?<call>setTimeout|setInterval)\s*\(.*,\s*(?<ms>\d[\d_]*)\s*\)");
         static readonly Regex Call = new Regex(@"(?<![\w.$])(?<fn>[A-Za-z_$][\w$]*)\s*\((?<args>[^()]*)\)");
         static readonly Regex Def = new Regex(@"\b(?:def|function|func|fn|sub|proc|fun)\s+(?:\([^)]*\)\s*)?(?<name>[A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\((?<params>[^)]*)\)");
         static readonly Regex MethodDef = new Regex(@"^\s*(?:(?:public|private|protected|internal|static|final|override|async|virtual|abstract|export)\s+)*[\w<>\[\],.?]+\s+(?<name>[A-Za-z_]\w*)\s*\((?<params>[^()]*)\)\s*(?:throws [\w, .]+)?\s*\{?\s*$");
@@ -138,19 +142,27 @@ namespace Connascence.Generic
                 foreach (var cl in CodeLines(f))
                 {
                     var seen = new HashSet<int>();
-                    foreach (Match m in SubjectThenLiteral.Matches(cl.Value).Cast<Match>().Concat(LiteralThenSubject.Matches(cl.Value).Cast<Match>()))
+                    var matches = SubjectThenLiteral.Matches(cl.Value).Cast<Match>()
+                        .Concat(LiteralThenSubject.Matches(cl.Value).Cast<Match>())
+                        .Concat(Assignment.Matches(cl.Value).Cast<Match>());
+                    foreach (Match m in matches)
                     {
                         var litGroup = m.Groups["lit"];
                         if (!seen.Add(litGroup.Index)) continue;
                         var lit = litGroup.Value;
-                        var subject = m.Groups["subject"].Value;
-                        subject = subject.Substring(subject.LastIndexOf('.') + 1);
+                        var subject = SubjectName(m.Groups["subject"].Value);
                         if (subject.Length == 0 || Keywords.Contains(subject) || subject == "null" || subject == "None" || subject == "nil") continue;
+                        var subjectWords = Text.Words(subject);
+                        bool codeLikeSubject = subjectWords.Count > 0 && codeLike.Contains(subjectWords[subjectWords.Count - 1]);
                         bool isString = lit.StartsWith("\"") || lit.StartsWith("'");
-                        if (isString && lit.Length <= 2) continue;
-                        if (!isString && ignored.Contains(lit)) continue;
                         var op = m.Groups["op"].Value;
-                        bool relational = !(op == "==" || op == "!=" || op == "===" || op == "!==");
+                        // Assigning a literal is only interesting when the target holds a code (status = 7), not for every x = 5.
+                        if (op == "=" && !codeLikeSubject) continue;
+                        if (isString && lit.Length <= 2) continue;
+                        // 0, 1, 2... are ordinary numbers unless compared with or assigned to a code.
+                        bool commonNumber = !isString && ignored.Contains(lit);
+                        if (commonNumber && !(codeLikeSubject && (op == "=" || op == "==" || op == "!=" || op == "===" || op == "!=="))) continue;
+                        bool relational = !(op == "==" || op == "!=" || op == "===" || op == "!==" || op == "=");
                         if (isString && relational) continue; // "<" between strings is usually generics or markup, not a comparison
                         var tag = !isString && relational ? "limit" : (isString ? "str" : "num");
                         var key = tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant();
@@ -171,6 +183,7 @@ namespace Connascence.Generic
                 bool codeSubject = words.Count > 0 && codeLike.Contains(words[words.Count - 1]);
                 bool limit = parts[0] == "limit";
                 if (locs.Count < 2 && !(codeSubject && !limit)) continue;
+                if (locs.Count < 2 && parts[0] == "num" && ignored.Contains(parts[1])) continue;
 
                 yield return new Finding
                 {
@@ -182,13 +195,21 @@ namespace Connascence.Generic
                     Degree = locs.Count,
                     Cause = limit
                         ? "The limit " + value + " is checked against " + subject + " " + Text.Spread(locs) + ". These checks must stay equal."
-                        : "The value " + value + " is compared with " + subject + " " + Text.Spread(locs) + ". Each place has to know what " + value + " means.",
+                        : "The value " + value + " is compared with or assigned to " + subject + " " + Text.Spread(locs) + ". Each place has to know what " + value + " means.",
                     Suggestion = limit
                         ? "Name the limit once next to the code that owns the rule, and use that name in every check."
                         : "Give " + value + " a name in one place (an enum or constant) and use the name everywhere.",
                     ChangeProbe = "If " + value + " changes meaning or value, will " + Text.All(locs.Count, "place") + " be found? Is that plausible?",
                 };
             }
+        }
+
+        /// <summary>order.status -> status; row["status"] -> status.</summary>
+        static string SubjectName(string raw)
+        {
+            var b = raw.IndexOf('[');
+            if (b >= 0) return raw.Substring(b).Trim('[', ']', ' ', '"', '\'');
+            return raw.Substring(raw.LastIndexOf('.') + 1);
         }
 
         // ---------- Boolean flags ----------
@@ -361,13 +382,20 @@ namespace Connascence.Generic
                 {
                     if (IsDefinitionLine(cl.Value)) continue;
                     var m = Sleep.Match(cl.Value);
-                    if (!m.Success) continue;
+                    string title = null;
+                    if (m.Success) title = m.Groups["call"].Value + "(" + Text.Quote(m.Groups["args"].Value) + ")";
+                    else
+                    {
+                        var t = TimerCall.Match(cl.Value);   // setTimeout(() => refresh(), 3000): the callback holds brackets
+                        if (t.Success) title = t.Groups["call"].Value + "(..., " + t.Groups["ms"].Value + ")";
+                    }
+                    if (title == null) continue;
                     var loc = Loc(f, cl.Key, "wait");
                     yield return new Finding
                     {
                         RuleId = "GNT01",
                         Kind = Kind.Timing,
-                        Title = m.Groups["call"].Value + "(" + Text.Quote(m.Groups["args"].Value) + ")",
+                        Title = title,
                         GroupKey = loc.File + "|" + cl.Value.Trim(),
                         Locations = new List<CodeLocation> { loc },
                         Degree = 1,

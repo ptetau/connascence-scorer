@@ -35,8 +35,7 @@
     {
       "rule": "GNT01",
       "titleContains": "3000",
-      "why": "setTimeout with a fixed delay",
-      "gap": "Only sleep-style calls are recognised. A fixed setTimeout delay is the JavaScript version of the same guess."
+      "why": "setTimeout with a fixed delay"
     },
     {
       "rule": "GNM01",
@@ -50,18 +49,16 @@
     {
       "rule": "GNM01",
       "lines": [
-        "worker/jobs.py:24"
+        "worker/jobs.py:25"
       ],
-      "why": "job[\"status\"] == 7 is the same status code",
-      "gap": "Dictionary access has no plain name before the operator, so it is skipped."
+      "why": "job[\"status\"] == 7 is the same status code"
     },
     {
       "rule": "GNM01",
       "lines": [
         "worker/jobs.py:14"
       ],
-      "why": "job.status = 7 assigns the same code",
-      "gap": "Generic mode only collects comparisons, so assignments of a status code are not counted as places that must change."
+      "why": "job.status = 7 assigns the same code"
     }
   ]
 }

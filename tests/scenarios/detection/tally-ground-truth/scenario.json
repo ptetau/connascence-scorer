@@ -129,8 +129,7 @@
       "files": [
         "scripts/overdue_report.py"
       ],
-      "why": "status 5 compared twice in the Python job",
-      "gap": "The generic engine looks for `name == literal`. Dictionary access like i[\"status\"] == 5 has no plain name before the operator, so it is skipped."
+      "why": "status 5 compared twice in the Python job"
     },
     {
       "rule": "CNM01",

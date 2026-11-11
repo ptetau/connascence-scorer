@@ -1,0 +1,5 @@
+{
+  "description": "Generic mode stays quiet on ordinary assignments and counts: only code-like names (status, mode, type...) count as meanings, and 0-2 need two places.",
+  "mode": "generic",
+  "maxFindings": 0
+}
