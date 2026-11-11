@@ -181,9 +181,8 @@ namespace Connascence.Cli
                 }
                 foreach (var m in matchers)
                 {
-                    bool hit = f.Locations.Any(l =>
-                        m.Globs.Any(g => g.IsMatch(l.File)) ||
-                        m.Future.Keywords.Any(k => k.Length > 0 && Mentions(l, k)));
+                    bool hit = f.Locations.Any(l => m.Globs.Any(g => g.IsMatch(l.File))) ||
+                               m.Future.Keywords.Any(k => k.Length > 0 && IsAbout(f, k));
                     if (hit) f.Futures.Add(m.Future.Id);
                 }
                 // Stable only if every place in the coupling sits in a stable area.
@@ -195,10 +194,41 @@ namespace Connascence.Cli
             }
         }
 
+        /// <summary>
+        /// True when a finding is about the keyword: it names the finding's subject, title, files, types or members,
+        /// or it appears in the code of at least half its places. A word that turns up on one line of a large
+        /// coupling (a Status check on a line that also reads a cache) doesn't make the coupling about it.
+        /// </summary>
+        static bool IsAbout(Finding f, string keyword)
+        {
+            var kw = Words(keyword);
+            if (kw.Count == 0) return false;
+            var structural = new[] { f.Title, f.GroupKey }.Concat(f.Locations.SelectMany(l => new[] { l.File, l.Type, l.Member }));
+            if (structural.Any(t => HasWords(t, kw))) return true;
+            var inCode = f.Locations.Count(l => HasWords(l.Snippet, kw));
+            return inCode > 0 && inCode * 2 >= f.Locations.Count;
+        }
+
+        /// <summary>For stable areas: one place matches the keyword by name or in its code.</summary>
         static bool Mentions(CodeLocation l, string keyword)
         {
-            var hay = (l.File + " " + l.Type + " " + l.Member + " " + l.Snippet);
-            return hay.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0;
+            var kw = Words(keyword);
+            return kw.Count > 0 && new[] { l.File, l.Type, l.Member, l.Snippet }.Any(t => HasWords(t, kw));
+        }
+
+        static List<string> Words(string text) => Text.Words(Regex.Replace(text ?? "", "[^A-Za-z0-9]+", " "));
+
+        /// <summary>Whole-word match, case-insensitive: "InvoiceCache" matches "InvoiceCache.Items" and "invoice_cache"; "Pay" does not match "Payee".</summary>
+        static bool HasWords(string text, List<string> kw)
+        {
+            var words = Words(text);
+            for (int i = 0; i + kw.Count <= words.Count; i++)
+            {
+                int j = 0;
+                while (j < kw.Count && words[i + j] == kw[j]) j++;
+                if (j == kw.Count) return true;
+            }
+            return false;
         }
     }
 
