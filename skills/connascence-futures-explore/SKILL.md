@@ -64,7 +64,7 @@ Give a horizon when you can ("next quarter", "within a year", "1-2 years").
 
 Each future needs `areas` (path globs from the repo root) and/or `keywords` (type names, concept words) that pick out the code it would touch. Be concrete. "Second payment provider" → `["src/**/Payments/**"]` and `["PaymentClient", "Charge"]`. A future that matches nothing can't inform the review, unless it is genuinely all new code (say so in its description).
 
-Also list **stable** areas you are confident won't change: generated code, a fixed external file format, settled legacy modules. Findings that sit entirely in a stable area and touch no future are ranked lower.
+Also list **stable** areas you are confident won't change: generated code, a fixed external file format, settled legacy modules. Findings that sit entirely in a stable area and touch no future are ranked lower. Don't mark an area stable if one of your futures expects part of it to change: narrow the stable entry to the part that won't (for example `"keywords": ["DirectCreditLine"]` instead of the whole file).
 
 ## 6. Write the file
 

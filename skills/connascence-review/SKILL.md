@@ -37,6 +37,8 @@ Work from the top (highest priority) down. For each one:
 
 Never accept just to get past the gate. If you aren't sure, say so to the user rather than accepting.
 
+**Split a finding when only some places share a meaning.** The tool groups places by what they look like, so a finding can mix real coupling with coincidence: a display date format and a bank file's date format that happen to be the same string, or two limits of 50 that mean different things. Decide each group on its own. Refactor the places that must change together (give them one home), and leave the coincidental ones separate and untouched. Never accept the whole finding because one place doesn't belong. Log one decision for the finding and say how you split it.
+
 ## 4. Refactor well
 
 - Use the suggestion as a starting point, not a script. Aim for one of two moves: make the connascence weaker (meaning → named type, position → names, algorithm → one shared function, execution order → types that make the wrong order impossible, identity → one owner passed in), or bring the places closer together (same method, same class, same module).
@@ -53,7 +55,7 @@ connascence decide <id> refactor --reason "Status is now the OrderStatus enum; r
 connascence decide <id> accept   --reason "Seed data for the demo store; rewritten wholesale if it changes, never edited in place"
 ```
 
-A good reason names the change you considered and why it is or isn't hurt. An accepted finding comes back for review if the coupling grows (a new place joins it), because its id changes.
+A good reason names the change you considered and why it is or isn't hurt. For a refactor, that means the future change it protects against ("adding PartiallyPaid is now one enum member"), not only what you changed ("replaced 5 with InvoiceStatus.Overdue"). An accepted finding comes back for review if the coupling grows (a new place joins it), because its id changes.
 
 For a refactor, log the decision after the change, using the id from before the change (it will no longer appear in the report).
 

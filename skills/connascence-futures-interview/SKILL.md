@@ -28,7 +28,7 @@ Ask:
 
 ## 2. Which axes are plausible
 
-Show only the axes that apply, pre-filled with what you found ("Today: one Postgres database. Next step might be: database-agnostic or a second store"). Ask the owner to mark each: **likely**, **maybe**, **no**. Always add: "Anything on your roadmap I haven't listed?"
+Show only the axes that apply, pre-filled with what you found ("Today: one Postgres database. Next step might be: database-agnostic or a second store"). Ask the owner to mark each: **likely**, **maybe**, **no**. Always add: "Anything on your roadmap I haven't listed?" An axis marked **no** gets no future, not a low one, and an existing future the owner rules out is removed (check the decision log first; if a decision cites it, mark it low and say why).
 
 Good prompts, matched to what you found:
 
@@ -67,7 +67,7 @@ Turn the answers into futures:
 
 ## 6. Confirm and write
 
-Show the owner a compact list: id, title, likelihood, horizon, and the code it touches. Ask for corrections once. Then write `.connascence/futures.json` (schema in the explore skill) and save the interview notes, in the owner's words, to `.connascence/futures-interview.md` with today's date.
+Show the owner a compact list: id, title, likelihood, horizon, and the code it touches. Ask for corrections once. Write what they confirmed; if you change anything after that (even narrowing areas), tell them what changed and why. Then write `.connascence/futures.json` (schema in the explore skill) and save the interview notes, in the owner's words, to `.connascence/futures-interview.md` with today's date.
 
 Keep existing ids where a future is unchanged so past accept and refactor decisions still point at the right one.
 
