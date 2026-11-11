@@ -134,6 +134,7 @@ namespace Connascence.Generic
         {
             var ignored = new HashSet<string>(s.IgnoredNumbers);
             var codeLike = new HashSet<string>(s.CodeLikeNames);
+            var platform = new HashSet<string>(s.IgnoredSubjects ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
             var groups = new Dictionary<string, List<CodeLocation>>();
             var subjects = new Dictionary<string, string>();
 
@@ -150,7 +151,12 @@ namespace Connascence.Generic
                         var litGroup = m.Groups["lit"];
                         if (!seen.Add(litGroup.Index)) continue;
                         var lit = litGroup.Value;
-                        var subject = SubjectName(m.Groups["subject"].Value);
+                        var rawSubject = m.Groups["subject"].Value;
+                        var subject = SubjectName(rawSubject);
+                        // typeof x === "function" and document.readyState === "loading" compare with values the platform defines.
+                        if (platform.Contains(subject) || platform.Contains(rawSubject)) continue;
+                        var before = cl.Value.Substring(0, m.Groups["subject"].Index).TrimEnd();
+                        if (before.EndsWith("typeof")) continue;
                         if (subject.Length == 0 || Keywords.Contains(subject) || subject == "null" || subject == "None" || subject == "nil") continue;
                         var subjectWords = Text.Words(subject);
                         bool codeLikeSubject = subjectWords.Count > 0 && codeLike.Contains(subjectWords[subjectWords.Count - 1]);

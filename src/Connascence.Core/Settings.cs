@@ -47,6 +47,12 @@ namespace Connascence
             "status", "state", "type", "kind", "mode", "code", "role", "category", "level", "flag", "flags", "action", "op", "operation",
         };
 
+        /// <summary>Names whose values are fixed by a language or platform, not the app (generic mode).</summary>
+        public List<string> IgnoredSubjects { get; set; } = new List<string>
+        {
+            "readyState", "key", "keyCode", "which", "nodeType", "nodeName", "tagName", "__name__", "platform", "sys.platform", "os.name",
+        };
+
         /// <summary>Method name prefixes that suggest "call me before anything else".</summary>
         public List<string> InitMethodPrefixes { get; set; } = new List<string>
         {

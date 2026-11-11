@@ -72,7 +72,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | CNV02 | Value | The same limit checked in several places (`Length > 50`) |
 | CNI01 | Identity | Mutable static state used from several members |
 
-Tests are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations are excluded.
+Tests, and mocks, fakes and stubs (`BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations are excluded.
 
 ## Generic mode
 

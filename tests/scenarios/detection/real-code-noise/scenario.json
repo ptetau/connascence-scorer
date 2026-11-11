@@ -1,0 +1,14 @@
+{
+  "description": "Noise found when running on dotnet/eShop: platform constants in JS and Python, statics that are never written, and mock services shipped with the app.",
+  "expect": [
+    { "rule": "CNI01", "titleContains": "Counter", "why": "Counter++ writes it: real shared state" }
+  ],
+  "forbid": [
+    { "rule": "CNI01", "titleContains": "SourceName", "why": "never written after its declaration: a missing readonly, not shared mutable state" },
+    { "anyFile": ["App/Services/BasketMockService.cs"], "why": "mocks and fakes are test code" },
+    { "rule": "GNM01", "titleContains": "function", "why": "typeof x === 'function' is a language constant" },
+    { "rule": "GNM01", "titleContains": "loading", "why": "document.readyState values are fixed by the browser" },
+    { "rule": "GNM01", "titleContains": "Enter", "why": "event.key values are fixed by the browser" },
+    { "rule": "GNM01", "titleContains": "__main__", "why": "Python's own idiom" }
+  ]
+}
