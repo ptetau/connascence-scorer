@@ -81,7 +81,7 @@
     {
       "type": "command_ran",
       "label": "ran the connascence tool",
-      "pattern": "connascence (check|analyze)"
+      "pattern": "connascence (check|analyze|decide)|git commit"
     },
     {
       "type": "skill_used",
