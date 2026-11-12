@@ -13,6 +13,8 @@ jobs:
       DOTNET_NOLOGO: 1
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
@@ -35,3 +37,7 @@ jobs:
           printf '#!/bin/sh\nexec dotnet %s "$@"\n' "$PWD/src/Connascence.Cli/bin/Debug/net8.0/connascence.dll" > "$RUNNER_TEMP/bin/connascence"
           chmod +x "$RUNNER_TEMP/bin/connascence"
           PATH="$RUNNER_TEMP/bin:$PATH" sh tests/e2e.sh "$RUNNER_TEMP/e2e"
+
+      - name: Coupling gate (the analyzer on its own code)
+        if: github.event_name == 'pull_request'
+        run: dotnet src/Connascence.Cli/bin/Debug/net8.0/connascence.dll check . --since "origin/${{ github.base_ref }}" --format markdown

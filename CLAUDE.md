@@ -30,3 +30,23 @@ Skill evals cost API usage; run them when a skill or the CLI output an agent rea
 - When a detector change fixes a known gap, the scenario runner reports `FIXED`: remove that `gap` marker.
 - When you find a new weakness, add a scenario with a `gap` marker rather than leaving it undocumented.
 - Keep the fixture compiling (`dotnet build tests/fixtures/tally/Tally.Api` in a copy) so agents in skill evals can verify refactors.
+
+## Coupling check
+
+This repo runs its own analyzer as a pre-commit hook (`.githooks/pre-commit`, built from this checkout) and in CI on pull requests.
+Turn the hook on once per clone: `git config core.hooksPath .githooks`. It fails when a change adds or grows
+coupling that makes code expensive to change.
+
+When it fails, load the connascence-review skill (with your skill tool, before deciding anything) and follow it. The
+short version below is a reminder, not a substitute:
+- Read each finding's cause, suggested fix, change probe and the futures that touch it (.connascence/futures.json).
+- If a likely change would force edits in several of the listed places, refactor. Keep the fix small and readable.
+- If not, accept it: `connascence decide <id> accept --reason "<change considered> and why it isn't hurt"`.
+- Log refactors too: `connascence decide <id> refactor --reason "..." --future <id>`.
+- Never accept just to pass the gate. Don't fix unrelated baseline findings unless asked.
+
+If .connascence/futures.json is missing or stale, run the connascence-futures-explore skill first
+(or connascence-futures-interview if the owner is available).
+
+The skills live in `skills/`; when working in this repo, read them from there (for example `skills/connascence-review/SKILL.md`)
+if they aren't installed as Claude Code skills. The futures are in `.connascence/futures.json`; `samples/` is excluded on purpose.

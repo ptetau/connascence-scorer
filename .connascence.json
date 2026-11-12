@@ -1,0 +1,116 @@
+{
+  "mode": "auto",
+  "includeTests": false,
+  "exclude": [
+    "**/bin/**",
+    "**/obj/**",
+    "**/*.g.cs",
+    "**/*.generated.cs",
+    "**/*.Designer.cs",
+    "**/node_modules/**",
+    "**/*.min.js",
+    "**/Migrations/**",
+    "**/migrations/**",
+    "**/db/migrate/**",
+    "**/DbScripts*/**",
+    "**/????-??-??_*.sql",
+    "**/V*__*.sql",
+    "samples/**"
+  ],
+  "thresholds": {
+    "minScore": 0,
+    "maxFindingCost": 20,
+    "failOn": "new"
+  },
+  "volatility": {
+    "enabled": true,
+    "months": 6,
+    "medium": 3,
+    "high": 11
+  },
+  "log": {
+    "enabled": true,
+    "trackCost": 10
+  },
+  "scoring": {
+    "strength": {
+      "Name": 0,
+      "Type": 0,
+      "Meaning": 3,
+      "Position": 4,
+      "Algorithm": 5,
+      "Execution": 6,
+      "Timing": 7,
+      "Value": 8,
+      "Identity": 9
+    },
+    "distanceWeight": {
+      "SameMember": 0.1,
+      "SameType": 0.25,
+      "SameFile": 0.5,
+      "SameProject": 1,
+      "CrossProject": 2
+    },
+    "degreeExponent": 1,
+    "scoreScale": 100,
+    "minParametersForPosition": 4,
+    "minSameTypeParameters": 2,
+    "minTupleElements": 3,
+    "minDuplicateStatements": 5,
+    "minDuplicateLinesGeneric": 6,
+    "minGenericParameters": 5,
+    "ignoredNumbers": [
+      "0",
+      "1",
+      "-1",
+      "2",
+      "0.0",
+      "1.0",
+      "100",
+      "0.5"
+    ],
+    "codeLikeNames": [
+      "status",
+      "state",
+      "type",
+      "kind",
+      "mode",
+      "code",
+      "role",
+      "category",
+      "level",
+      "flag",
+      "flags",
+      "action",
+      "op",
+      "operation"
+    ],
+    "ignoredSubjects": [
+      "readyState",
+      "key",
+      "keyCode",
+      "which",
+      "nodeType",
+      "nodeName",
+      "tagName",
+      "__name__",
+      "platform",
+      "sys.platform",
+      "os.name"
+    ],
+    "initMethodPrefixes": [
+      "Init",
+      "Initialize",
+      "Initialise",
+      "Open",
+      "Start",
+      "Connect",
+      "Begin",
+      "Setup",
+      "SetUp",
+      "Configure",
+      "Load",
+      "Prepare"
+    ]
+  }
+}
