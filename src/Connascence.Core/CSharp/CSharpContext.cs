@@ -34,7 +34,7 @@ namespace Connascence.CSharp
 
         readonly ImmutableDictionary<SyntaxTree, SourceFile> _files;
         readonly ImmutableDictionary<SyntaxTree, SemanticModel> _models;
-        readonly Lazy<ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>>> _calls;
+        readonly Lazy<CallIndex> _calls;
 
         public CSharpContext(Compilation compilation, IEnumerable<SourceFile> files, Settings? settings)
         {
@@ -43,7 +43,7 @@ namespace Connascence.CSharp
             Settings = settings ?? new Settings();
             _files = Files.GroupBy(f => f.Tree).ToImmutableDictionary(g => g.Key, g => g.First());
             _models = _files.Keys.ToImmutableDictionary(tree => tree, tree => compilation.GetSemanticModel(tree));
-            _calls = new Lazy<ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>>>(FindCalls);
+            _calls = new Lazy<CallIndex>(FindCalls);
         }
 
         public Compilation Compilation { get; }
@@ -78,14 +78,24 @@ namespace Connascence.CSharp
         public static bool IsInSource(ISymbol? s) => s != null && s.Locations.Any(l => l.IsInSource);
 
         /// <summary>All calls to source-declared methods and constructors, keyed by the original definition. Found on first use.</summary>
-        public IReadOnlyDictionary<IMethodSymbol, ImmutableArray<CallSite>> Calls => _calls.Value;
+        /// <remarks>In the order each method is first called, so findings built from it come out in a stable order.</remarks>
+        public ImmutableArray<(IMethodSymbol Method, ImmutableArray<CallSite> Sites)> Calls => _calls.Value.InOrder;
 
-        ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>> FindCalls() =>
-            Roots.SelectMany(root => root.DescendantNodes())
+        /// <summary>The calls to each method, in first-seen order, and the same calls looked up by method.</summary>
+        sealed record CallIndex(
+            ImmutableArray<(IMethodSymbol Method, ImmutableArray<CallSite> Sites)> InOrder,
+            ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>> ByMethod);
+
+        CallIndex FindCalls()
+        {
+            var inOrder = Roots.SelectMany(root => root.DescendantNodes())
                 .Select(CallAt)
                 .OfType<CallSite>()
                 .GroupBy(c => c.Target, SameMethod)
-                .ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray(), SameMethod);
+                .Select(g => (Method: g.Key, Sites: g.ToImmutableArray()))
+                .ToImmutableArray();
+            return new CallIndex(inOrder, inOrder.GroupBy(x => x.Method, SameMethod).ToImmutableDictionary(g => g.Key, g => g.First().Sites, SameMethod));
+        }
 
         static readonly IEqualityComparer<IMethodSymbol> SameMethod = SymbolEqualityComparer.Default;
 
@@ -106,7 +116,7 @@ namespace Connascence.CSharp
 
         public IReadOnlyList<CallSite> CallsTo(IMethodSymbol? m)
         {
-            return m != null && Calls.TryGetValue(m.OriginalDefinition, out var list) ? list : ImmutableArray<CallSite>.Empty;
+            return m != null && _calls.Value.ByMethod.TryGetValue(m.OriginalDefinition, out var list) ? list : ImmutableArray<CallSite>.Empty;
         }
 
         // ---------- Describing locations ----------

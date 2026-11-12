@@ -9,19 +9,6 @@
   "src/Connascence.Core/CSharp/CSharpContext.cs": {
     "FP0015": 1
   },
-  "src/Connascence.Core/CSharp/MeaningDetector.cs": {
-    "FP0001": 9,
-    "FP0002": 3,
-    "FP0003": 1,
-    "FP0005": 7
-  },
-  "src/Connascence.Core/CSharp/StateDetector.cs": {
-    "FP0001": 11,
-    "FP0002": 1,
-    "FP0004": 1,
-    "FP0005": 15,
-    "FP0015": 1
-  },
   "src/Connascence.Core/Generic/GenericEngine.cs": {
     "FP0001": 31,
     "FP0002": 3,
