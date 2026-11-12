@@ -1,5 +1,7 @@
 # Connascence analyzer
 
+> **Agents:** read [AGENTS.md](AGENTS.md) for setup steps, commands, exit codes and how to act on findings.
+
 Scores how much of a codebase's coupling will make it expensive to change, explains each case, and suggests how to fix it. Built for C#, with a rougher generic mode for other languages. Designed to run in a pre-commit hook that a coding agent (or a person) responds to.
 
 The tool is deterministic: it finds and scores coupling. Whether that coupling matters depends on whether the code will change, which the tool can't know. So it works with a list of likely futures, written by the futures skills, and asks the reviewer to refactor or accept each finding with a logged reason.
