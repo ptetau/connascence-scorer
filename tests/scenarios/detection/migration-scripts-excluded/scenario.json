@@ -1,0 +1,4 @@
+{
+  "description": "Migration scripts are append-only history: copies between them never need to change together. Seen on bitwarden/server, where dated SQL scripts in util/Migrator/DbScripts produced about 2,600 of 4,000 findings.",
+  "maxFindings": 0
+}
