@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -91,9 +92,29 @@ var tests = new List<(string Name, Action Body)>
     ("cost follows strength x degree x distance", () =>
     {
         var s = new Settings();
-        var f = new Finding { RuleId = "X", Kind = Kind.Meaning, Degree = 4, FixedDistance = Distance.CrossProject, Locations = { new CodeLocation { File = "a", Project = "p" } } };
-        Scoring.Score(f, s);
+        var f = Scoring.Score(new Finding { RuleId = "X", Kind = Kind.Meaning, Degree = 4, FixedDistance = Distance.CrossProject, Locations = new[] { new CodeLocation { File = "a", Project = "p" } } }, s);
         Assert(Math.Abs(f.Cost - 3 * 4 * 2.0) < 0.001, "cost was " + f.Cost);
+    }),
+    ("a partial weight map falls back to the defaults, ignoring key case", () =>
+    {
+        var s = new Settings { DistanceWeight = ValueMap.Of(("crossProject", 3.0)) };
+        Assert(s.WeightOf(Distance.CrossProject) == 3, "crossProject should apply, got " + s.WeightOf(Distance.CrossProject));
+        Assert(s.WeightOf(Distance.SameType) == 0.25, "SameType should keep its default, got " + s.WeightOf(Distance.SameType));
+        Assert(!s.UnknownKeys().Any(), "crossProject is a known key");
+        var typo = new Settings { Strength = ValueMap.Of(("Meening", 9.0)) };
+        Assert(typo.UnknownKeys().SequenceEqual(new[] { "strength.Meening" }), "a misspelt kind should be reported");
+        Assert(typo.StrengthOf(Kind.Meaning) == 3, "Meaning should keep its default");
+    }),
+    ("records holding lists and maps compare by value", () =>
+    {
+        Assert(new Settings() == new Settings(), "two default settings should be equal");
+        Assert(new Settings { IgnoredNumbers = ValueList.Of("0", "1") } == new Settings { IgnoredNumbers = ImmutableArray.Create("0", "1") }, "same list, same settings");
+        Assert(new Settings { IgnoredNumbers = ValueList.Of("0") } != new Settings(), "a different list should differ");
+        Assert(ValueMap.Of(("a", 1.0), ("b", 2.0)) == ValueMap.Of(("b", 2.0), ("a", 1.0)), "map equality ignores order");
+        Assert(ValueMap.Of(("a", 1.0), ("b", 2.0)).GetHashCode() == ValueMap.Of(("b", 2.0), ("a", 1.0)).GetHashCode(), "and so does its hash");
+        Assert(default(ValueList<string>).Count == 0 && default(ValueList<string>) == ValueList.Of<string>(), "default is the empty list");
+        var summary = new ScoreSummary { ByKind = ValueList.Of(new KindSummary { Kind = Kind.Meaning, Findings = 2, Cost = 6 }) };
+        Assert(summary == new ScoreSummary { ByKind = ValueList.Of(new KindSummary { Kind = Kind.Meaning, Findings = 2, Cost = 6 }) }, "equal summaries");
     }),
     ("generic mode finds a repeated status code and a fixed sleep in Python", () =>
     {
@@ -123,19 +144,19 @@ static List<Finding> Analyze(params (string Project, string File, string Code)[]
     var refs = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "").Split(Path.PathSeparator)
         .Where(p => p.Length > 0).Select(p => (MetadataReference)MetadataReference.CreateFromFile(p));
     var ctx = CSharpEngine.FromSources(sources.Select(s => new SourceInput { Path = s.File, RelativePath = s.Project + "/" + s.File, Project = s.Project, Text = s.Code }), refs, new Settings());
-    var findings = CSharpEngine.Analyze(ctx);
-    if (ctx.Warnings.Count > 0) throw new Exception(string.Join("; ", ctx.Warnings));
-    return findings;
+    var (findings, warnings) = CSharpEngine.Analyze(ctx);
+    if (warnings.Count > 0) throw new Exception(string.Join("; ", warnings));
+    return findings.ToList();
 }
 
-static Finding Single(List<Finding> f, string rule)
+static Finding Single(IReadOnlyList<Finding> f, string rule)
 {
     var hits = f.Where(x => x.RuleId == rule).ToList();
     if (hits.Count != 1) throw new Exception("expected one " + rule + ", got " + hits.Count + ". All: " + string.Join(", ", f.Select(x => x.RuleId + " " + x.Title)));
     return hits[0];
 }
 
-static void None(List<Finding> f, string rule)
+static void None(IReadOnlyList<Finding> f, string rule)
 {
     var hits = f.Where(x => x.RuleId == rule).ToList();
     if (hits.Count != 0) throw new Exception("expected no " + rule + ", got: " + string.Join(", ", hits.Select(x => x.Title)));

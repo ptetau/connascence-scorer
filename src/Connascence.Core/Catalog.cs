@@ -1,19 +1,20 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Linq;
 
 namespace Connascence
 {
     /// <summary>Plain-English description of each kind, and the general way to weaken it.</summary>
     public static class Catalog
     {
-        public sealed class Entry
+        public sealed record Entry
         {
-            public Kind Kind;
-            public string Means;
-            public string Weaken;
+            public Kind Kind { get; init; }
+            public string Means { get; init; } = "";
+            public string Weaken { get; init; } = "";
         }
 
-        public static readonly IReadOnlyList<Entry> Kinds = new List<Entry>
-        {
+        public static readonly ImmutableArray<Entry> Kinds = ImmutableArray.Create(
             new Entry { Kind = Kind.Name, Means = "Places must agree on a name.", Weaken = "This is the weakest kind. Rename tools handle it. Nothing to do." },
             new Entry { Kind = Kind.Type, Means = "Places must agree on a type.", Weaken = "The compiler checks it. Usually fine." },
             new Entry { Kind = Kind.Meaning, Means = "Places must agree on what a value means (3 = shipped, \"A\" = admin, true = draft).", Weaken = "Give the value a name in one place: an enum, a constant, or a small type. Then the compiler checks it." },
@@ -22,14 +23,9 @@ namespace Connascence
             new Entry { Kind = Kind.Execution, Means = "Places must do things in a set order (call Open before Send).", Weaken = "Make the wrong order impossible: set up in the constructor, or return a new type once set up." },
             new Entry { Kind = Kind.Timing, Means = "Places must agree on how long things take.", Weaken = "Wait for the real event, not a fixed delay. Keep any timings that remain in one policy." },
             new Entry { Kind = Kind.Value, Means = "Several values must change together to stay correct (a limit checked in two places).", Weaken = "Keep one source of truth and derive the rest from it." },
-            new Entry { Kind = Kind.Identity, Means = "Places must share the very same object instance (static or global mutable state).", Weaken = "Give the state one owner and pass it in, or make it immutable." },
-        };
+            new Entry { Kind = Kind.Identity, Means = "Places must share the very same object instance (static or global mutable state).", Weaken = "Give the state one owner and pass it in, or make it immutable." });
 
-        public static Entry Of(Kind k)
-        {
-            foreach (var e in Kinds) if (e.Kind == k) return e;
-            return null;
-        }
+        public static Entry? Of(Kind k) => Kinds.FirstOrDefault(e => e.Kind == k);
 
         /// <summary>Review guidance shown with every report. This is the lens, not a rule book.</summary>
         public const string ReviewLens =

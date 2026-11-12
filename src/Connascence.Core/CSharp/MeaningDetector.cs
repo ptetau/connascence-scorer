@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -11,134 +13,128 @@ namespace Connascence.CSharp
     /// CNM01 / CNV02: literal values whose meaning (or limit) several places must agree on.
     /// CNM02: bare true/false arguments that the caller must decode.
     /// </summary>
-    public sealed class MeaningDetector : ICSharpDetector
+    public sealed record MeaningDetector : ICSharpDetector
     {
         enum Use { Equality, Relational, Switch, Assignment, Argument, Indexer }
 
-        sealed class Hit
+        sealed record Hit
         {
-            public LiteralExpressionSyntax Literal;
-            public string Subject;
-            public Use Use;
-            public string Owner;   // type that declares the subject, e.g. Order for order.Status
-            public List<Hit> Hits; // the whole group, set on the first hit
+            public required LiteralExpressionSyntax Literal { get; init; }
+            public required string Subject { get; init; }
+            public Use Use { get; init; }
+            public string? Owner { get; init; }   // type that declares the subject, e.g. Order for order.Status
         }
 
-        public IEnumerable<Finding> Detect(CSharpContext ctx)
-        {
-            return MagicValues(ctx).Concat(BooleanFlags(ctx));
-        }
+        public IEnumerable<Finding> Detect(CSharpContext ctx) =>
+            MagicValues(ctx).Concat(BooleanFlags(ctx));
 
         // ---------------- Magic values ----------------
 
-        IEnumerable<Finding> MagicValues(CSharpContext ctx)
+        /// <summary>Literals with a meaning, grouped by kind, value and subject: one finding per group.</summary>
+        static IEnumerable<Finding> MagicValues(CSharpContext ctx)
         {
-            var s = ctx.Settings;
-            var ignored = new HashSet<string>(s.IgnoredNumbers);
-            var codeLike = new HashSet<string>(s.CodeLikeNames);
-            var groups = new Dictionary<string, List<Hit>>();
-
-            foreach (var root in ctx.Roots)
-            {
-                foreach (var lit in root.DescendantNodes().OfType<LiteralExpressionSyntax>())
-                {
-                    bool isNumber = lit.IsKind(SyntaxKind.NumericLiteralExpression);
-                    bool isString = lit.IsKind(SyntaxKind.StringLiteralExpression);
-                    if (!isNumber && !isString) continue;
-
-                    var value = isNumber ? NumberText(lit) : lit.Token.ValueText;
-                    // 0, 1, 2... are usually just numbers. Compared with or assigned to a code (Status == 1) they are a meaning like any other.
-                    bool common = isNumber && ignored.Contains(value);
-                    if (isString && value.Length == 0) continue;
-                    if (IsNamedConstantDefinition(lit)) continue;
-
-                    var hit = Classify(ctx, lit);
-                    if (hit == null) continue;
-                    if (common && !(IsCodeLike(hit.Subject, codeLike) && (hit.Use == Use.Equality || hit.Use == Use.Switch || hit.Use == Use.Assignment))) continue;
-                    if (isNumber && hit.Use == Use.Indexer) continue;      // arr[3] is handled by the position detector
-                    if (isNumber && hit.Use == Use.Argument) continue;    // too noisy without knowing the parameter's role
-                    if (isString && hit.Use == Use.Argument && !IsCodeLike(hit.Subject, codeLike)) continue;
-
-                    var kindTag = isNumber && hit.Use == Use.Relational ? "limit" : (isNumber ? "num" : "str");
-                    var subjectKey = hit.Use == Use.Indexer ? "[]" : hit.Subject.ToLowerInvariant();
-                    var key = kindTag + "|" + value + "|" + subjectKey;
-                    List<Hit> list;
-                    if (!groups.TryGetValue(key, out list)) { list = new List<Hit>(); groups[key] = list; }
-                    list.Add(hit);
-                }
-            }
-
-            foreach (var kv in groups)
-            {
-                var hits = kv.Value;
-                var first = hits[0];
-                first.Hits = hits;
-                bool isString = first.Literal.IsKind(SyntaxKind.StringLiteralExpression);
-                bool isLimit = kv.Key.StartsWith("limit|");
-                bool codeSubject = IsCodeLike(first.Subject, codeLike);
-                if (hits.Count < 2 && !(codeSubject && !isLimit)) continue;
-                if (hits.Count < 2 && first.Literal.IsKind(SyntaxKind.NumericLiteralExpression) && ignored.Contains(NumberText(first.Literal))) continue;
-
-                var locs = hits.Select(h => ctx.Locate(h.Literal, Roles.Use)).ToList();
-                var value = isString ? "\"" + Text.Quote(first.Literal.Token.ValueText) + "\"" : NumberText(first.Literal);
-                var subject = first.Subject;
-
-                if (isLimit)
-                {
-                    yield return new Finding
-                    {
-                        RuleId = "CNV02",
-                        Kind = Kind.Value,
-                        Title = "Repeated limit " + value,
-                        GroupKey = kv.Key,
-                        Locations = locs,
-                        Degree = locs.Count,
-                        Cause = "The limit " + value + " is checked against " + subject + " " + Text.Spread(locs) +
-                                ". These checks must stay equal, but nothing ties them together.",
-                        Suggestion = "Name the limit once, in the type that owns the rule (for example `const int Max" + Text.PascalCase(subject) +
-                                     " = " + value + ";`), and reference that constant from every check. Better still, move the check into one method or a value type that validates itself.",
-                        ChangeProbe = "If the limit changes (a business rule, a column size, a vendor limit), will someone find " +
-                                      Text.All(locs.Count, "check") + "? Is a change like that plausible?",
-                    };
-                    continue;
-                }
-
-                string suggestion;
-                if (first.Use == Use.Indexer)
-                    suggestion = "Keep the key " + value + " in one place: bind it once to a typed options class, or make it a constant next to the code that owns it.";
-                else if (!isString && codeSubject)
-                    suggestion = "Replace " + value + " with a named enum member (for example `" + EnumName(first) +
-                                 ".Shipped`, using the real name) and make " + subject + " that enum type, so the meaning lives in one place and the compiler checks it.";
-                else if (isString && codeSubject)
-                    suggestion = "Replace " + value + " with an enum, or a constant in one shared place (for example `" + EnumName(first) + "s." +
-                                 Text.PascalCase(first.Literal.Token.ValueText) + "`), and use it everywhere.";
-                else
-                    suggestion = "Give " + value + " a name once (a const or static readonly) next to the code that owns its meaning, and use that name in every place.";
-
-                var verb = first.Use == Use.Indexer ? "used as a lookup key" :
-                           first.Use == Use.Switch ? "used as a case for " + subject :
-                           first.Use == Use.Assignment ? "assigned to or compared with " + subject :
-                           "compared with " + subject;
-
-                yield return new Finding
-                {
-                    RuleId = "CNM01",
-                    Kind = Kind.Meaning,
-                    Title = "Magic value " + value,
-                    GroupKey = kv.Key,
-                    Locations = locs,
-                    Degree = locs.Count,
-                    Cause = "The value " + value + " is " + verb + " " + Text.Spread(locs) +
-                            (locs.Count == 1 ? ". Whoever sets " + subject + " elsewhere must know what " + value + " means." :
-                            ". Every one of these places has to know what " + value + " means."),
-                    Suggestion = suggestion,
-                    ChangeProbe = "If the meaning of " + value + " changes, or a new value is added next to it, " + Text.All(locs.Count, "place") +
-                                  " (and whoever produces the value) must change together. Is a change like that plausible?",
-                };
-            }
+            var ignored = ctx.Settings.IgnoredNumbers.ToImmutableHashSet();
+            var codeLike = ctx.Settings.CodeLikeNames.ToImmutableHashSet();
+            return ctx.Roots.SelectMany(root => root.DescendantNodes().OfType<LiteralExpressionSyntax>())
+                .Select(lit => KeyedHit(ctx, lit, ignored, codeLike))
+                .Where(x => x.HasValue)
+                .Select(x => x!.Value)
+                .GroupBy(x => x.Key, x => x.Hit)
+                .Select(g => MagicValue(ctx, g.Key, g.ToImmutableArray(), ignored, codeLike))
+                .OfType<Finding>();
         }
 
-        static bool IsCodeLike(string subject, HashSet<string> codeLike)
+        /// <summary>The literal's use, keyed by kind (num, str or limit), value and subject; or null if it isn't a magic value.</summary>
+        static (string Key, Hit Hit)? KeyedHit(CSharpContext ctx, LiteralExpressionSyntax lit, ImmutableHashSet<string> ignored, ImmutableHashSet<string> codeLike)
+        {
+            bool isNumber = lit.IsKind(SyntaxKind.NumericLiteralExpression);
+            bool isString = lit.IsKind(SyntaxKind.StringLiteralExpression);
+            if (!isNumber && !isString) return null;
+
+            var value = isNumber ? NumberText(lit) : lit.Token.ValueText;
+            // 0, 1, 2... are usually just numbers. Compared with or assigned to a code (Status == 1) they are a meaning like any other.
+            bool common = isNumber && ignored.Contains(value);
+            if (isString && value.Length == 0) return null;
+            if (IsNamedConstantDefinition(lit)) return null;
+
+            var hit = Classify(ctx, lit);
+            if (hit == null) return null;
+            if (common && !(IsCodeLike(hit.Subject, codeLike) && (hit.Use == Use.Equality || hit.Use == Use.Switch || hit.Use == Use.Assignment))) return null;
+            if (isNumber && hit.Use == Use.Indexer) return null;      // arr[3] is handled by the position detector
+            if (isNumber && hit.Use == Use.Argument) return null;    // too noisy without knowing the parameter's role
+            if (isString && hit.Use == Use.Argument && !IsCodeLike(hit.Subject, codeLike)) return null;
+
+            var kindTag = isNumber && hit.Use == Use.Relational ? "limit" : (isNumber ? "num" : "str");
+            var subjectKey = hit.Use == Use.Indexer ? "[]" : hit.Subject.ToLowerInvariant();
+            return (kindTag + "|" + value + "|" + subjectKey, hit);
+        }
+
+        static Finding? MagicValue(CSharpContext ctx, string key, ImmutableArray<Hit> hits, ImmutableHashSet<string> ignored, ImmutableHashSet<string> codeLike)
+        {
+            var first = hits[0];
+            bool isString = first.Literal.IsKind(SyntaxKind.StringLiteralExpression);
+            bool isLimit = key.StartsWith("limit|", StringComparison.Ordinal);
+            bool codeSubject = IsCodeLike(first.Subject, codeLike);
+            if (hits.Length < 2 && !(codeSubject && !isLimit)) return null;
+            if (hits.Length < 2 && first.Literal.IsKind(SyntaxKind.NumericLiteralExpression) && ignored.Contains(NumberText(first.Literal))) return null;
+
+            var locs = hits.Select(h => ctx.Locate(h.Literal, Roles.Use)).ToImmutableArray();
+            var value = isString ? "\"" + Text.Quote(first.Literal.Token.ValueText) + "\"" : NumberText(first.Literal);
+            var subject = first.Subject;
+
+            if (isLimit)
+            {
+                return new Finding
+                {
+                    RuleId = "CNV02",
+                    Kind = Kind.Value,
+                    Title = "Repeated limit " + value,
+                    GroupKey = key,
+                    Locations = locs,
+                    Degree = locs.Length,
+                    Cause = "The limit " + value + " is checked against " + subject + " " + Text.Spread(locs) +
+                            ". These checks must stay equal, but nothing ties them together.",
+                    Suggestion = "Name the limit once, in the type that owns the rule (for example `const int Max" + Text.PascalCase(subject) +
+                                 " = " + value + ";`), and reference that constant from every check. Better still, move the check into one method or a value type that validates itself.",
+                    ChangeProbe = "If the limit changes (a business rule, a column size, a vendor limit), will someone find " +
+                                  Text.All(locs.Length, "check") + "? Is a change like that plausible?",
+                };
+            }
+
+            var suggestion =
+                first.Use == Use.Indexer
+                    ? "Keep the key " + value + " in one place: bind it once to a typed options class, or make it a constant next to the code that owns it."
+                : !isString && codeSubject
+                    ? "Replace " + value + " with a named enum member (for example `" + EnumName(first, hits) +
+                      ".Shipped`, using the real name) and make " + subject + " that enum type, so the meaning lives in one place and the compiler checks it."
+                : isString && codeSubject
+                    ? "Replace " + value + " with an enum, or a constant in one shared place (for example `" + EnumName(first, hits) + "s." +
+                      Text.PascalCase(first.Literal.Token.ValueText) + "`), and use it everywhere."
+                    : "Give " + value + " a name once (a const or static readonly) next to the code that owns its meaning, and use that name in every place.";
+
+            var verb = first.Use == Use.Indexer ? "used as a lookup key" :
+                       first.Use == Use.Switch ? "used as a case for " + subject :
+                       first.Use == Use.Assignment ? "assigned to or compared with " + subject :
+                       "compared with " + subject;
+
+            return new Finding
+            {
+                RuleId = "CNM01",
+                Kind = Kind.Meaning,
+                Title = "Magic value " + value,
+                GroupKey = key,
+                Locations = locs,
+                Degree = locs.Length,
+                Cause = "The value " + value + " is " + verb + " " + Text.Spread(locs) +
+                        (locs.Length == 1 ? ". Whoever sets " + subject + " elsewhere must know what " + value + " means." :
+                        ". Every one of these places has to know what " + value + " means."),
+                Suggestion = suggestion,
+                ChangeProbe = "If the meaning of " + value + " changes, or a new value is added next to it, " + Text.All(locs.Length, "place") +
+                              " (and whoever produces the value) must change together. Is a change like that plausible?",
+            };
+        }
+
+        static bool IsCodeLike(string subject, ImmutableHashSet<string> codeLike)
         {
             if (string.IsNullOrEmpty(subject)) return false;
             var words = Text.Words(subject);
@@ -151,37 +147,31 @@ namespace Connascence.CSharp
             string text = v is double d ? d.ToString(CultureInfo.InvariantCulture)
                         : v is float f ? f.ToString(CultureInfo.InvariantCulture)
                         : v is decimal m ? m.ToString(CultureInfo.InvariantCulture)
-                        : System.Convert.ToString(v, CultureInfo.InvariantCulture);
-            if (lit.Parent is PrefixUnaryExpressionSyntax p && p.IsKind(SyntaxKind.UnaryMinusExpression)) text = "-" + text;
-            return text;
+                        : System.Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
+            return lit.Parent is PrefixUnaryExpressionSyntax p && p.IsKind(SyntaxKind.UnaryMinusExpression) ? "-" + text : text;
         }
 
         /// <summary>Literals that define a named constant are the fix, not the problem.</summary>
-        static bool IsNamedConstantDefinition(LiteralExpressionSyntax lit)
-        {
-            foreach (var a in lit.Ancestors())
-            {
-                switch (a)
-                {
-                    case AttributeSyntax _: return true;
-                    case EnumMemberDeclarationSyntax _: return true;
-                    case FieldDeclarationSyntax fd:
-                        return fd.Modifiers.Any(SyntaxKind.ConstKeyword) ||
-                               (fd.Modifiers.Any(SyntaxKind.StaticKeyword) && fd.Modifiers.Any(SyntaxKind.ReadOnlyKeyword));
-                    case LocalDeclarationStatementSyntax ld: return ld.IsConst;
-                    case ParameterSyntax _: return true; // default parameter values
-                    case StatementSyntax _: return false;
-                    case MemberDeclarationSyntax _: return false;
-                }
-            }
-            return false;
-        }
+        static bool IsNamedConstantDefinition(LiteralExpressionSyntax lit) =>
+            lit.Ancestors().Select(DefinesConstant).FirstOrDefault(answer => answer.HasValue) ?? false;
 
-        static Hit Classify(CSharpContext ctx, LiteralExpressionSyntax lit)
+        /// <summary>Whether this ancestor makes the literal a named constant's definition, or null to keep looking further out.</summary>
+        static bool? DefinesConstant(SyntaxNode a) => a switch
         {
-            SyntaxNode node = lit;
-            if (node.Parent is PrefixUnaryExpressionSyntax) node = node.Parent;
-            while (node.Parent is ParenthesizedExpressionSyntax || node.Parent is CastExpressionSyntax) node = node.Parent;
+            AttributeSyntax _ => true,
+            EnumMemberDeclarationSyntax _ => true,
+            FieldDeclarationSyntax fd => fd.Modifiers.Any(SyntaxKind.ConstKeyword) ||
+                                         (fd.Modifiers.Any(SyntaxKind.StaticKeyword) && fd.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)),
+            LocalDeclarationStatementSyntax ld => ld.IsConst,
+            ParameterSyntax _ => true, // default parameter values
+            StatementSyntax _ => false,
+            MemberDeclarationSyntax _ => false,
+            _ => null,
+        };
+
+        static Hit? Classify(CSharpContext ctx, LiteralExpressionSyntax lit)
+        {
+            var node = Unwrapped(lit.Parent is PrefixUnaryExpressionSyntax sign ? sign : lit);
             var parent = node.Parent;
 
             switch (parent)
@@ -228,17 +218,21 @@ namespace Connascence.CSharp
             return null;
         }
 
-        static string OwnerOf(CSharpContext ctx, ExpressionSyntax e)
+        /// <summary>The outermost of the parentheses and casts around a node: (int)(x) is used where the outer cast is.</summary>
+        static SyntaxNode Unwrapped(SyntaxNode node) =>
+            node.Parent is ParenthesizedExpressionSyntax || node.Parent is CastExpressionSyntax ? Unwrapped(node.Parent) : node;
+
+        static string? OwnerOf(CSharpContext ctx, ExpressionSyntax e)
         {
             var s = ctx.SymbolOf(e);
             return (s is IPropertySymbol || s is IFieldSymbol) ? s.ContainingType?.Name : null;
         }
 
-        static string EnumName(Hit h)
+        static string EnumName(Hit h, ImmutableArray<Hit> group)
         {
             var subject = Text.PascalCase(h.Subject);
-            var owner = h.Hits?.Select(x => x.Owner).FirstOrDefault(o => o != null);
-            return owner != null && !subject.StartsWith(owner) ? owner + subject : subject;
+            var owner = group.Select(x => x.Owner).FirstOrDefault(o => o != null);
+            return owner != null && !subject.StartsWith(owner, StringComparison.Ordinal) ? owner + subject : subject;
         }
 
         static bool IsComparison(SyntaxKind k) =>
@@ -246,20 +240,19 @@ namespace Connascence.CSharp
             k == SyntaxKind.LessThanExpression || k == SyntaxKind.LessThanOrEqualExpression ||
             k == SyntaxKind.GreaterThanExpression || k == SyntaxKind.GreaterThanOrEqualExpression;
 
-        static string SwitchSubject(SyntaxNode pattern)
-        {
-            foreach (var a in pattern.Ancestors())
-            {
-                if (a is SwitchExpressionSyntax se) return NameOf(se.GoverningExpression);
-                if (a is SwitchStatementSyntax ss) return NameOf(ss.Expression);
-                if (a is IsPatternExpressionSyntax ip) return NameOf(ip.Expression);
-                if (a is StatementSyntax) return null;
-            }
-            return null;
-        }
+        static string? SwitchSubject(SyntaxNode pattern) =>
+            pattern.Ancestors().Select(a => a switch
+                {
+                    SwitchExpressionSyntax se => (Found: true, Name: NameOf(se.GoverningExpression)),
+                    SwitchStatementSyntax ss => (Found: true, Name: NameOf(ss.Expression)),
+                    IsPatternExpressionSyntax ip => (Found: true, Name: NameOf(ip.Expression)),
+                    StatementSyntax _ => (Found: true, Name: (string?)null),
+                    _ => (Found: false, Name: (string?)null),
+                })
+                .FirstOrDefault(x => x.Found).Name;
 
         /// <summary>The name a value is compared with: x, obj.Status, GetStatus() all give the last identifier.</summary>
-        public static string NameOf(ExpressionSyntax e)
+        public static string? NameOf(ExpressionSyntax? e)
         {
             switch (e)
             {
@@ -276,7 +269,7 @@ namespace Connascence.CSharp
             return null;
         }
 
-        static string ParameterName(CSharpContext ctx, ArgumentSyntax arg)
+        static string? ParameterName(CSharpContext ctx, ArgumentSyntax arg)
         {
             if (arg.NameColon != null) return arg.NameColon.Name.Identifier.Text;
             var list = arg.Parent as ArgumentListSyntax;
@@ -285,62 +278,53 @@ namespace Connascence.CSharp
             if (method == null) return null;
             var index = list.Arguments.IndexOf(arg);
             if (index < 0 || method.Parameters.Length == 0) return null;
-            if (index >= method.Parameters.Length) index = method.Parameters.Length - 1;
-            return method.Parameters[index].Name;
+            return method.Parameters[Math.Min(index, method.Parameters.Length - 1)].Name;   // a params argument maps to the last one
         }
 
         // ---------------- Boolean flags ----------------
 
-        IEnumerable<Finding> BooleanFlags(CSharpContext ctx)
+        static IEnumerable<Finding> BooleanFlags(CSharpContext ctx) =>
+            ctx.Calls.Select(c => BooleanFlags(ctx, c.Method, c.Sites)).OfType<Finding>();
+
+        /// <summary>The position of the first bare true/false argument in the call, or -1.</summary>
+        static int FlagIndex(CallSite call) =>
+            call.Args.Arguments.Select((a, i) => (Arg: a, Index: i))
+                .Where(x => x.Arg.NameColon == null &&
+                            (x.Arg.Expression.IsKind(SyntaxKind.TrueLiteralExpression) || x.Arg.Expression.IsKind(SyntaxKind.FalseLiteralExpression)))
+                .Select(x => x.Index).DefaultIfEmpty(-1).First();
+
+        static Finding? BooleanFlags(CSharpContext ctx, IMethodSymbol method, ImmutableArray<CallSite> sites)
         {
-            foreach (var kv in ctx.Calls)
+            var flaggedAt = sites.Select(call => (Call: call, Index: FlagIndex(call))).Where(x => x.Index >= 0).ToImmutableArray();
+            if (flaggedAt.IsEmpty) return null;
+            var flagged = flaggedAt.Select(x => x.Call).ToImmutableArray();
+            var flagParams = flaggedAt.Where(x => x.Index < method.Parameters.Length).Select(x => method.Parameters[x.Index].Name).Distinct().ToImmutableArray();
+
+            var decl = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            var declaration = decl != null && ctx.FileOf(decl.SyntaxTree) != null
+                ? ImmutableArray.Create(ctx.Locate(decl is MethodDeclarationSyntax md ? md.Identifier
+                                                   : decl is ConstructorDeclarationSyntax cd ? cd.Identifier : decl.GetFirstToken(), Roles.Declaration))
+                : ImmutableArray<CodeLocation>.Empty;
+            var locs = declaration.Concat(flagged.Select(c => ctx.Locate(c.Node, Roles.CallSite))).ToImmutableArray();
+
+            var name = method.MethodKind == MethodKind.Constructor ? "new " + method.ContainingType.Name : method.Name;
+            var param = flagParams.Length > 0 ? string.Join(", ", flagParams) : "a bool parameter";
+            var callers = flagged.Length;
+            return new Finding
             {
-                var method = kv.Key;
-                var flagged = new List<CallSite>();
-                var flagParams = new HashSet<string>();
-                foreach (var call in kv.Value)
-                {
-                    for (int i = 0; i < call.Args.Arguments.Count; i++)
-                    {
-                        var a = call.Args.Arguments[i];
-                        if (a.NameColon != null) continue;
-                        if (!(a.Expression.IsKind(SyntaxKind.TrueLiteralExpression) || a.Expression.IsKind(SyntaxKind.FalseLiteralExpression))) continue;
-                        flagged.Add(call);
-                        if (i < method.Parameters.Length) flagParams.Add(method.Parameters[i].Name);
-                        break;
-                    }
-                }
-                if (flagged.Count == 0) continue;
-
-                var decl = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-                var locs = new List<CodeLocation>();
-                if (decl != null && ctx.FileOf(decl.SyntaxTree) != null)
-                {
-                    var tok = decl is MethodDeclarationSyntax md ? md.Identifier
-                            : decl is ConstructorDeclarationSyntax cd ? cd.Identifier : decl.GetFirstToken();
-                    locs.Add(ctx.Locate(tok, Roles.Declaration));
-                }
-                locs.AddRange(flagged.Select(c => ctx.Locate(c.Node, Roles.CallSite)));
-
-                var name = method.MethodKind == MethodKind.Constructor ? "new " + method.ContainingType.Name : method.Name;
-                var param = flagParams.Count > 0 ? string.Join(", ", flagParams.ToArray()) : "a bool parameter";
-                var callers = flagged.Count;
-                yield return new Finding
-                {
-                    RuleId = "CNM02",
-                    Kind = Kind.Meaning,
-                    Title = "Boolean flag argument to " + name,
-                    GroupKey = method.ToDisplayString(),
-                    Locations = locs,
-                    Degree = callers,
-                    Cause = Text.CountVerb(callers, "caller", "passes", "pass") + " a bare true/false for " + param + " to " + name +
-                            "(). Each caller has to know what true means, and the code doesn't say.",
-                    Suggestion = "Split " + name + " into two well-named methods, or replace the bool with an enum (for example `" + name +
-                                 "(" + Text.PascalCase(param.Split(',')[0]) + "Mode.X)`). Quick step: have callers use a named argument (`" +
-                                 (flagParams.FirstOrDefault() ?? "flag") + ": true`).",
-                    ChangeProbe = "If a third option is needed, or what the flag means changes, every caller passing a bare true/false must be revisited. Is that plausible?",
-                };
-            }
+                RuleId = "CNM02",
+                Kind = Kind.Meaning,
+                Title = "Boolean flag argument to " + name,
+                GroupKey = method.ToDisplayString(),
+                Locations = locs,
+                Degree = callers,
+                Cause = Text.CountVerb(callers, "caller", "passes", "pass") + " a bare true/false for " + param + " to " + name +
+                        "(). Each caller has to know what true means, and the code doesn't say.",
+                Suggestion = "Split " + name + " into two well-named methods, or replace the bool with an enum (for example `" + name +
+                             "(" + Text.PascalCase(param.Split(',')[0]) + "Mode.X)`). Quick step: have callers use a named argument (`" +
+                             (flagParams.FirstOrDefault() ?? "flag") + ": true`).",
+                ChangeProbe = "If a third option is needed, or what the flag means changes, every caller passing a bare true/false must be revisited. Is that plausible?",
+            };
         }
     }
 }

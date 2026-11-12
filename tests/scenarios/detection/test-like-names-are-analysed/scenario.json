@@ -1,0 +1,26 @@
+{
+  "description": "Files whose names only contain 'test', 'stub' or 'mock' inside a word (Latest, Contest, Stubborn, Hammock) are ordinary code and are analysed. Real test and fake classes (OrderTests, FakeClock) are still skipped.",
+  "expect": [
+    {
+      "rule": "CNM01",
+      "groupKey": "num|7|status",
+      "degree": 4,
+      "files": [
+        "App/Latest.cs",
+        "App/Contest.cs",
+        "App/Stubborn.cs",
+        "App/Hammock.cs"
+      ]
+    }
+  ],
+  "forbid": [
+    {
+      "rule": "CNM01",
+      "anyFile": "App/OrderTests.cs"
+    },
+    {
+      "rule": "CNM01",
+      "anyFile": "App/FakeClock.cs"
+    }
+  ]
+}

@@ -37,6 +37,8 @@ namespace Connascence.Cli
         public string GroupKey { get; set; }
         public int Degree { get; set; }
         public double Cost { get; set; }
+        /// <summary>Accepted when the baseline was taken: recorded for its size only, not as existing debt.</summary>
+        public bool Accepted { get; set; }
     }
 
     /// <summary>A plausible change to the software. Written by the futures skills or by hand.</summary>
@@ -152,7 +154,7 @@ namespace Connascence.Cli
         }
 
         /// <summary>Marks accepted and baseline findings, and tags each with the futures that would touch it.</summary>
-        public void Apply(IList<Finding> findings)
+        public List<Finding> Apply(IEnumerable<Finding> findings)
         {
             var accepted = Accepted().Accepted.GroupBy(a => a.Fingerprint).ToDictionary(g => g.Key, g => g.Last());
             var baseline = Baseline();
@@ -163,37 +165,48 @@ namespace Connascence.Cli
                 .Select(s => new { s.Reason, s.Keywords, Globs = s.Areas.Select(Glob.ToRegex).ToList() }).ToList();
             var matchers = futures.Select(f => new { Future = f, Globs = f.Areas.Select(Glob.ToRegex).ToList() }).ToList();
 
-            foreach (var f in findings)
+            return findings.Select(f =>
             {
-                Acceptance a;
-                if (!f.Accepted && accepted.TryGetValue(f.Fingerprint, out a))
-                {
-                    f.Accepted = true;
-                    f.AcceptedReason = a.Reason + (string.IsNullOrEmpty(a.Future) ? "" : " (considered future " + a.Future + ")");
-                }
-                f.InBaseline = inBaseline.Contains(f.Fingerprint);
-                if (baseline != null && !f.InBaseline)
-                {
-                    var before = baseline.Items.FirstOrDefault(b => b.RuleId == f.RuleId && b.GroupKey == f.GroupKey);
-                    f.Change = before == null ? "new"
-                        : f.Degree > before.Degree ? "grew from " + before.Degree + " to " + f.Degree + " places"
-                        : f.Degree < before.Degree ? "shrank from " + before.Degree + " to " + f.Degree + " places"
-                        : "changed places";
-                }
-                foreach (var m in matchers)
-                {
-                    bool hit = f.Locations.Any(l => m.Globs.Any(g => g.IsMatch(l.File))) ||
-                               m.Future.Keywords.Any(k => k.Length > 0 && IsAbout(f, k));
-                    if (hit) f.Futures.Add(m.Future.Id);
-                }
+                var isBaseline = inBaseline.Contains(f.Fingerprint);
+                var before = baseline == null || isBaseline ? null
+                    : baseline.Items.FirstOrDefault(b => b.Fingerprint == f.Fingerprint)
+                      ?? baseline.Items.FirstOrDefault(b => b.RuleId == f.RuleId && b.GroupKey == f.GroupKey);
+                var change = baseline == null || isBaseline || before?.Fingerprint == f.Fingerprint ? f.Change
+                    : before == null ? "new"
+                    : Growth(before, f);
+                // An inline accept covers the coupling as it was when the baseline was taken. Once it grows, it needs a new look.
+                var inlineLapsed = f.Accepted && (f.AcceptedReason ?? "").StartsWith("inline:", StringComparison.Ordinal)
+                                   && change != null && change.StartsWith("grew", StringComparison.Ordinal);
+                var stillAccepted = f.Accepted && !inlineLapsed;
+                var accept = !stillAccepted && accepted.TryGetValue(f.Fingerprint, out var a) ? a : null;
+                var futureIds = matchers
+                    .Where(m => f.Locations.Any(l => m.Globs.Any(g => g.IsMatch(l.File))) || m.Future.Keywords.Any(k => k.Length > 0 && IsAbout(f, k)))
+                    .Select(m => m.Future.Id);
                 // Stable only if every place in the coupling sits in a stable area.
-                foreach (var s in stable)
+                var stableArea = stable.FirstOrDefault(s =>
+                    f.Locations.All(l => s.Globs.Any(g => g.IsMatch(l.File)) || s.Keywords.Any(k => k.Length > 0 && Mentions(l, k))));
+                return f with
                 {
-                    bool all = f.Locations.All(l => s.Globs.Any(g => g.IsMatch(l.File)) || s.Keywords.Any(k => k.Length > 0 && Mentions(l, k)));
-                    if (all) { f.StableReason = s.Reason ?? "marked stable"; break; }
-                }
-            }
+                    Accepted = stillAccepted || accept != null,
+                    AcceptedReason = accept != null
+                        ? accept.Reason + (string.IsNullOrEmpty(accept.Future) ? "" : " (considered future " + accept.Future + ")")
+                        : stillAccepted ? f.AcceptedReason : null,
+                    InBaseline = isBaseline,
+                    Change = inlineLapsed ? change + "; the inline accept was for the smaller coupling" : change,
+                    Futures = f.Futures.Concat(futureIds).ToList(),
+                    StableReason = stableArea == null ? f.StableReason : stableArea.Reason ?? "marked stable",
+                };
+            }).ToList();
         }
+
+        /// <summary>How a finding compares with its baseline entry: more places, a higher cost (places moved further apart), fewer places, or moved.</summary>
+        static string Growth(BaselineItem before, Finding f) =>
+            f.Degree > before.Degree ? "grew from " + before.Degree + " to " + f.Degree + " places"
+            : f.Degree < before.Degree ? "shrank from " + before.Degree + " to " + f.Degree + " places"
+            : f.Cost > before.Cost + 0.01 ? "grew in cost from " + Num(before.Cost) + " to " + Num(f.Cost) + " (same places count, further apart)"
+            : "changed places";
+
+        static string Num(double d) => d.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
         /// <summary>
         /// True when a finding is about the keyword: it names the finding's subject, title, files, types or members,
@@ -217,10 +230,10 @@ namespace Connascence.Cli
             return kw.Count > 0 && new[] { l.File, l.Type, l.Member, l.Snippet }.Any(t => HasWords(t, kw));
         }
 
-        static List<string> Words(string text) => Text.Words(Regex.Replace(text ?? "", "[^A-Za-z0-9]+", " "));
+        static IReadOnlyList<string> Words(string text) => Text.Words(Regex.Replace(text ?? "", "[^A-Za-z0-9]+", " "));
 
         /// <summary>Whole-word match, case-insensitive: "InvoiceCache" matches "InvoiceCache.Items" and "invoice_cache"; "Pay" does not match "Payee".</summary>
-        static bool HasWords(string text, List<string> kw)
+        static bool HasWords(string text, IReadOnlyList<string> kw)
         {
             var words = Words(text);
             for (int i = 0; i + kw.Count <= words.Count; i++)

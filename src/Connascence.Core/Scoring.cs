@@ -1,47 +1,43 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Connascence
 {
-    public sealed class KindSummary
+    public sealed record KindSummary
     {
-        public Kind Kind { get; set; }
-        public int Findings { get; set; }
-        public double Cost { get; set; }
+        public Kind Kind { get; init; }
+        public int Findings { get; init; }
+        public double Cost { get; init; }
     }
 
-    public sealed class ScoreSummary
+    public sealed record ScoreSummary
     {
-        public int Lines { get; set; }
-        public int Files { get; set; }
-        public double TotalCost { get; set; }
-        public double LoadPerKloc { get; set; }
-        public int Score { get; set; }
-        public int AcceptedFindings { get; set; }
-        public double AcceptedCost { get; set; }
-        public List<KindSummary> ByKind { get; set; } = new List<KindSummary>();
-        public List<KeyValuePair<string, double>> ByFile { get; set; } = new List<KeyValuePair<string, double>>();
+        public int Lines { get; init; }
+        public int Files { get; init; }
+        public double TotalCost { get; init; }
+        public double LoadPerKloc { get; init; }
+        public int Score { get; init; }
+        public int AcceptedFindings { get; init; }
+        public double AcceptedCost { get; init; }
+        public ValueList<KindSummary> ByKind { get; init; }
+        public ValueList<KeyValuePair<string, double>> ByFile { get; init; }
     }
 
     public static class Scoring
     {
         /// <summary>Distance between a set of locations = the widest gap between any two of them.</summary>
-        public static Distance DistanceOf(IList<CodeLocation> locs)
+        public static Distance DistanceOf(IReadOnlyList<CodeLocation> locs)
         {
             if (locs.Count <= 1) return Distance.SameMember;
             if (locs.Select(l => l.Project).Distinct().Count() > 1) return Distance.CrossProject;
-            var d = Distance.SameMember;
-            var distinct = locs.GroupBy(l => l.Anchor + "|" + (l.Type == null ? l.Line.ToString() : "")).Select(g => g.First()).Take(200).ToList();
-            for (int i = 0; i < distinct.Count; i++)
-                for (int j = i + 1; j < distinct.Count; j++)
-                {
-                    var pair = Between(distinct[i], distinct[j]);
-                    if (pair > d) d = pair;
-                }
-            return d;
+            var distinct = locs.GroupBy(l => l.Anchor + "|" + (l.Type == null ? l.Line.ToString(CultureInfo.InvariantCulture) : "")).Select(g => g.First()).Take(200).ToImmutableArray();
+            return distinct.SelectMany((a, i) => distinct.Skip(i + 1).Select(b => Between(a, b)))
+                .Aggregate(Distance.SameMember, (widest, d) => d > widest ? d : widest);
         }
 
         static Distance Between(CodeLocation a, CodeLocation b)
@@ -53,13 +49,18 @@ namespace Connascence
             return Distance.SameProject;
         }
 
-        /// <summary>Fills Distance (if not set by the detector), Degree, Cost and Fingerprint.</summary>
-        public static void Score(Finding f, Settings s)
+        /// <summary>The finding with Distance (if not set by the detector), Degree, Cost and Fingerprint filled in.</summary>
+        public static Finding Score(Finding f, Settings s)
         {
-            if (f.Degree <= 0) f.Degree = Math.Max(1, f.Locations.Count);
-            f.Distance = f.FixedDistance ?? DistanceOf(f.Locations);
-            f.Cost = Math.Round(s.StrengthOf(f.Kind) * Math.Pow(f.Degree, s.DegreeExponent) * s.WeightOf(f.Distance), 2);
-            f.Fingerprint = FingerprintOf(f);
+            var degree = f.Degree <= 0 ? Math.Max(1, f.Locations.Count) : f.Degree;
+            var distance = f.FixedDistance ?? DistanceOf(f.Locations);
+            var scored = f with
+            {
+                Degree = degree,
+                Distance = distance,
+                Cost = Math.Round(s.StrengthOf(f.Kind) * Math.Pow(degree, s.DegreeExponent) * s.WeightOf(distance), 2),
+            };
+            return scored with { Fingerprint = FingerprintOf(scored) };
         }
 
         /// <summary>
@@ -74,9 +75,7 @@ namespace Connascence
             using (var sha = SHA1.Create())
             {
                 var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
-                var sb = new StringBuilder();
-                for (int i = 0; i < 5; i++) sb.Append(bytes[i].ToString("x2"));
-                return sb.ToString();
+                return string.Concat(bytes.Take(5).Select(b => b.ToString("x2", CultureInfo.InvariantCulture)));
             }
         }
 
@@ -85,39 +84,71 @@ namespace Connascence
         /// because code was copied into the finding for the copy. Fixing the copy fixes them too,
         /// so they are listed under it and their cost is added to it.
         /// </summary>
-        public static List<Finding> Consolidate(List<Finding> findings)
+        public static IReadOnlyList<Finding> Consolidate(IReadOnlyList<Finding> findings)
         {
-            foreach (var f in findings)
-                f.Locations = f.Locations.GroupBy(l => l.File + ":" + l.Line + ":" + l.Role).Select(g => g.First()).ToList();
+            var deduped = findings
+                .Select(f => f with { Locations = f.Locations.GroupBy(l => l.File + ":" + l.Line + ":" + l.Role).Select(g => g.First()).ToImmutableArray() })
+                .ToImmutableArray();
+            var copies = deduped.Where(f => f.Kind == Kind.Algorithm && f.Locations.All(l => l.EndLine > 0)).ToImmutableArray();
+            if (copies.IsEmpty) return deduped;
 
-            var copies = findings.Where(f => f.Kind == Kind.Algorithm && f.Locations.All(l => l.EndLine > 0)).ToList();
-            if (copies.Count == 0) return findings;
-            var removed = new HashSet<Finding>();
-            foreach (var f in findings)
-            {
-                if (copies.Contains(f)) continue;
-                foreach (var c in copies)
-                {
-                    var regions = f.Locations.Select(l => c.Locations.FindIndex(r => r.File == l.File && l.Line >= r.Line && l.Line <= r.EndLine)).ToList();
-                    if (regions.Any(i => i < 0) || regions.Distinct().Count() < 2) continue;
-                    removed.Add(f);
-                    c.Cost = Math.Round(c.Cost + f.Cost, 2);
-                    c.Subsumed.Add(f.Title);
-                    break;
-                }
-            }
-            foreach (var c in copies.Where(c => c.Subsumed.Count > 0))
-                c.Cause += " The copies also repeat: " + Text.Join(c.Subsumed.Distinct().ToList()) + ". Fixing the copy fixes those too.";
-            return findings.Where(f => !removed.Contains(f)).ToList();
+            // Each other finding that lies inside two or more regions of a copy belongs to the first such copy.
+            var owners = deduped.Where(f => !copies.Contains(f))
+                .Select(f => (Finding: f, Copy: copies.FirstOrDefault(c => LiesInside(f, c))))
+                .Where(x => x.Copy != null)
+                .ToImmutableArray();
+            var folded = owners.Select(x => x.Finding).ToImmutableHashSet();
+            return deduped.Where(f => !folded.Contains(f))
+                .Select(f => copies.Contains(f) ? Absorb(f, owners.Where(x => x.Copy == f).Select(x => x.Finding).ToImmutableArray()) : f)
+                .ToImmutableArray();
         }
 
-        public static ScoreSummary Summarise(IList<Finding> findings, int lines, int files, Settings s)
+        /// <summary>True when the finding's places fall inside the copy's regions, in at least two different copies.</summary>
+        static bool LiesInside(Finding f, Finding copy)
         {
-            var open = findings.Where(f => !f.Accepted).ToList();
+            var regions = f.Locations.Select(l => RegionOf(copy, l)).ToImmutableArray();
+            return !regions.Any(i => i < 0) && regions.Distinct().Count() >= 2;
+        }
+
+        static int RegionOf(Finding copy, CodeLocation l) =>
+            copy.Locations.Select((r, i) => (r, i)).Where(x => x.r.File == l.File && l.Line >= x.r.Line && l.Line <= x.r.EndLine)
+                .Select(x => x.i).DefaultIfEmpty(-1).First();
+
+        /// <summary>The copy, with the findings it contains listed under it and their cost added to it.</summary>
+        static Finding Absorb(Finding copy, ImmutableArray<Finding> contained)
+        {
+            if (contained.IsEmpty) return copy;
+            var subsumed = copy.Subsumed.Concat(contained.Select(f => f.Title)).ToImmutableArray();
+            return copy with
+            {
+                Cost = contained.Aggregate(copy.Cost, (cost, f) => Math.Round(cost + f.Cost, 2)),
+                Subsumed = subsumed,
+                Cause = copy.Cause + " The copies also repeat: " + Text.Join(subsumed.Distinct().ToImmutableArray()) + ". Fixing the copy fixes those too.",
+            };
+        }
+
+        /// <summary>
+        /// Findings with the same group key get "#2", "#3" ... added to it, in order, so each has its own id (two identical
+        /// waits in one method). The first keeps its key, so existing ids don't change.
+        /// </summary>
+        public static IReadOnlyList<Finding> NumberRepeats(IEnumerable<Finding> findings) =>
+            findings.Aggregate(
+                    (Seen: ImmutableDictionary<string, int>.Empty, Out: ImmutableList<Finding>.Empty),
+                    (state, f) =>
+                    {
+                        var key = f.GroupKey ?? "";
+                        var n = (state.Seen.TryGetValue(key, out var seen) ? seen : 0) + 1;
+                        return (state.Seen.SetItem(key, n), state.Out.Add(n == 1 ? f : f with { GroupKey = key + "#" + n }));
+                    })
+                .Out;
+
+        public static ScoreSummary Summarise(IReadOnlyList<Finding> findings, int lines, int files, Settings s)
+        {
+            var open = findings.Where(f => !f.Accepted).ToImmutableArray();
             var total = open.Sum(f => f.Cost);
             var kloc = Math.Max(lines, 1) / 1000.0;
             var load = total / Math.Max(kloc, 0.2); // floor stops tiny repos swinging wildly
-            var summary = new ScoreSummary
+            return new ScoreSummary
             {
                 Lines = lines,
                 Files = files,
@@ -126,26 +157,22 @@ namespace Connascence
                 Score = (int)Math.Round(100 * Math.Exp(-load / Math.Max(s.ScoreScale, 1))),
                 AcceptedFindings = findings.Count(f => f.Accepted),
                 AcceptedCost = Math.Round(findings.Where(f => f.Accepted).Sum(f => f.Cost), 1),
+                ByKind = open.GroupBy(f => f.Kind)
+                    .Select(g => new KindSummary { Kind = g.Key, Findings = g.Count(), Cost = Math.Round(g.Sum(f => f.Cost), 1) })
+                    .OrderByDescending(k => k.Cost).ToImmutableArray(),
+                ByFile = CostPerFile(open).OrderByDescending(p => p.Value)
+                    .Select(p => new KeyValuePair<string, double>(p.Key, Math.Round(p.Value, 1))).ToImmutableArray(),
             };
-            summary.ByKind = open.GroupBy(f => f.Kind)
-                .Select(g => new KindSummary { Kind = g.Key, Findings = g.Count(), Cost = Math.Round(g.Sum(f => f.Cost), 1) })
-                .OrderByDescending(k => k.Cost).ToList();
-
-            // Spread each finding's cost evenly over the files it touches.
-            var perFile = new Dictionary<string, double>();
-            foreach (var f in open)
-            {
-                var fs = f.Files.ToList();
-                foreach (var file in fs)
-                {
-                    double cur;
-                    perFile.TryGetValue(file, out cur);
-                    perFile[file] = cur + f.Cost / fs.Count;
-                }
-            }
-            summary.ByFile = perFile.OrderByDescending(p => p.Value)
-                .Select(p => new KeyValuePair<string, double>(p.Key, Math.Round(p.Value, 1))).ToList();
-            return summary;
         }
+
+        /// <summary>Each finding's cost, spread evenly over the files it touches, totalled per file (in order of first appearance).</summary>
+        static IEnumerable<KeyValuePair<string, double>> CostPerFile(IEnumerable<Finding> open) =>
+            open.SelectMany(f =>
+                {
+                    var files = f.Files.ToImmutableArray();
+                    return files.Select(file => (File: file, Share: f.Cost / files.Length));
+                })
+                .GroupBy(x => x.File)
+                .Select(g => new KeyValuePair<string, double>(g.Key, g.Aggregate(0.0, (sum, x) => sum + x.Share)));
     }
 }

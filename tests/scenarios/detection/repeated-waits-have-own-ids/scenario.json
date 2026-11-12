@@ -1,0 +1,13 @@
+{
+  "description": "Two identical fixed waits in one method are two findings with different ids, so accepting one doesn't accept the other (or a third added later).",
+  "expect": [
+    {
+      "rule": "CNT01",
+      "groupKey": "App|App/Worker.cs|Worker|Run|System.Threading.Thread.Sleep(500)"
+    },
+    {
+      "rule": "CNT01",
+      "groupKey": "App|App/Worker.cs|Worker|Run|System.Threading.Thread.Sleep(500)#2"
+    }
+  ]
+}

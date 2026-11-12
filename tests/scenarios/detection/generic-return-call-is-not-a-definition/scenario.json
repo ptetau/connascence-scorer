@@ -1,0 +1,5 @@
+{
+  "description": "In generic mode, `return render(...)` is a call, not a definition of render. Reading it as a second definition made render look overloaded, which hid the long positional parameter list.",
+  "mode": "generic",
+  "expect": [ { "rule": "GNP01", "titleContains": "render takes 5 parameters", "degree": 2 } ]
+}

@@ -15,9 +15,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: true   # external/functional-csharp: FunctionalLint
+      # The SDK version comes from global.json (.NET 11).
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.0.x
+          global-json-file: global.json
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -34,10 +36,44 @@ jobs:
       - name: End-to-end workflow
         run: |
           mkdir -p "$RUNNER_TEMP/bin"
-          printf '#!/bin/sh\nexec dotnet %s "$@"\n' "$PWD/src/Connascence.Cli/bin/Debug/net8.0/connascence.dll" > "$RUNNER_TEMP/bin/connascence"
+          printf '#!/bin/sh\nexec dotnet %s "$@"\n' "$PWD/src/Connascence.Cli/bin/Debug/net11.0/connascence.dll" > "$RUNNER_TEMP/bin/connascence"
           chmod +x "$RUNNER_TEMP/bin/connascence"
           PATH="$RUNNER_TEMP/bin:$PATH" sh tests/e2e.sh "$RUNNER_TEMP/e2e"
 
       - name: Coupling gate (the analyzer on its own code)
         if: github.event_name == 'pull_request'
-        run: dotnet src/Connascence.Cli/bin/Debug/net8.0/connascence.dll check . --since "origin/${{ github.base_ref }}" --format markdown
+        run: dotnet src/Connascence.Cli/bin/Debug/net11.0/connascence.dll check . --since "origin/${{ github.base_ref }}" --format markdown
+
+      # Connascence.Core is a functional core. Pull requests are checked against the base branch's policy,
+      # so a pull request can't loosen the rules it is checked against.
+      - name: Use the base branch's FunctionalLint policy
+        id: policy
+        run: |
+          path="$RUNNER_TEMP/functionallint.policy"
+          if [ -n "${GITHUB_BASE_REF:-}" ] && git show "origin/$GITHUB_BASE_REF:functionallint.policy" > "$path" 2>/dev/null; then
+            echo "The gate uses $GITHUB_BASE_REF's functionallint.policy."
+            git diff --quiet "origin/$GITHUB_BASE_REF" -- functionallint.policy \
+              || echo "::warning file=functionallint.policy::This pull request changes the policy. The gate used $GITHUB_BASE_REF's copy; the change applies once it's merged."
+          else
+            cp functionallint.policy "$path"
+          fi
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      # The same for the baseline of known violations: the PR's own copy could raise its allowance.
+      - name: Use the base branch's FunctionalLint baseline
+        id: baseline
+        run: |
+          path="$RUNNER_TEMP/functionallint-baseline.json"
+          if [ -n "${GITHUB_BASE_REF:-}" ] && git show "origin/$GITHUB_BASE_REF:.functionallint-baseline.json" > "$path" 2>/dev/null; then
+            echo "The gate uses $GITHUB_BASE_REF's .functionallint-baseline.json."
+          else
+            cp .functionallint-baseline.json "$path"
+          fi
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
+      - name: Functional core gate (FunctionalLint on Connascence.Core)
+        env:
+          FUNCTIONALLINT_NO_SERVER: "1"
+          FUNCTIONALLINT_POLICY: ${{ steps.policy.outputs.path }}
+          FUNCTIONALLINT_BASELINE: ${{ steps.baseline.outputs.path }}
+        run: python3 scripts/functional-gate.py

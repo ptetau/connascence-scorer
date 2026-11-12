@@ -28,7 +28,8 @@ namespace Connascence.Cli
     /// <summary>Finds the files, runs the right engine for each language, and applies volatility, futures and acceptances.</summary>
     public static class Workspace
     {
-        static readonly HashSet<string> SkipDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        // Exact, case-sensitive names: "build" and "out" are output folders, but "Build/" or "Out/" may hold source.
+        static readonly HashSet<string> SkipDirs = new HashSet<string>(StringComparer.Ordinal)
         {
             ".git", ".connascence", "bin", "obj", "node_modules", "packages", "dist", "build", "out", "target", ".vs", ".idea", ".vscode",
             "vendor", "venv", ".venv", "__pycache__", ".next", ".nuxt", "coverage", "TestResults",
@@ -47,6 +48,7 @@ namespace Connascence.Cli
             var excludes = config.Exclude.Select(Glob.ToRegex).ToList();
             var settings = config.Scoring;
             var result = new AnalysisResult { Root = root, Mode = mode };
+            result.Warnings.AddRange(settings.UnknownKeys().Select(k => "Unknown setting " + k + " in .connascence.json is ignored. Use a kind (Meaning, Position ...) or distance (SameType, CrossProject ...) name."));
 
             var csharp = new List<SourceInput>();
             var generic = new List<TextFile>();
@@ -87,16 +89,17 @@ namespace Connascence.Cli
             if (csharp.Count > 0)
             {
                 var ctx = CSharpEngine.FromSources(csharp, References(), settings);
-                result.Findings.AddRange(CSharpEngine.Analyze(ctx));
-                result.Warnings.AddRange(ctx.Warnings);
+                var (found, warnings) = CSharpEngine.Analyze(ctx);
+                result.Findings.AddRange(found);
+                result.Warnings.AddRange(warnings);
             }
             if (generic.Count > 0) result.Findings.AddRange(GenericEngine.Analyze(generic, settings));
-            if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings);
+            if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings).ToList();
             result.CSharpFiles = csharp.Count;
             result.GenericFiles = generic.Count;
 
             var store = new Store(root);
-            store.Apply(result.Findings);
+            result.Findings = store.Apply(result.Findings);
             result.Futures = store.Futures().Futures;
 
             var git = useGit && config.Volatility.Enabled ? Git.Open(root) : null;
@@ -105,32 +108,25 @@ namespace Connascence.Cli
                 result.Commit = git.Head();
                 var churn = Git.Churn(git.Commits(config.Volatility.Months));
                 result.VolatilityUsed = churn.Count > 0;
-                foreach (var f in result.Findings)
-                {
-                    int max = 0, n;
-                    foreach (var file in f.Files) if (churn.TryGetValue(file, out n) && n > max) max = n;
-                    f.Volatility = max;
-                }
+                result.Findings = result.Findings
+                    .Select(f => f with { Volatility = f.Files.Select(file => churn.TryGetValue(file, out var n) ? n : 0).DefaultIfEmpty(0).Max() })
+                    .ToList();
             }
 
             var likelihood = result.Futures.ToDictionary(x => x.Id ?? "", x => (x.Likelihood ?? "medium").ToLowerInvariant());
-            foreach (var f in result.Findings)
+            result.Findings = result.Findings.Select(f =>
             {
-                f.VolatilityLevel = !result.VolatilityUsed ? null
+                var level = !result.VolatilityUsed ? null
                     : f.Volatility >= config.Volatility.High ? "high"
                     : f.Volatility >= config.Volatility.Medium ? "medium" : "low";
-                double vBoost = f.VolatilityLevel == "high" ? 1.0 : f.VolatilityLevel == "medium" ? 0.5 : 0;
-                double futureBoost = 1;
-                foreach (var id in f.Futures)
-                {
-                    string l;
-                    likelihood.TryGetValue(id, out l);
-                    var b = l == "high" ? 2.0 : l == "low" ? 1.2 : 1.5;
-                    if (b > futureBoost) futureBoost = b;
-                }
+                double vBoost = level == "high" ? 1.0 : level == "medium" ? 0.5 : 0;
+                double futureBoost = f.Futures
+                    .Select(id => likelihood.TryGetValue(id, out var l) ? l : null)
+                    .Select(l => l == "high" ? 2.0 : l == "low" ? 1.2 : 1.5)
+                    .Append(1.0).Max();
                 var stableFactor = f.StableReason != null && f.Futures.Count == 0 ? 0.25 : 1.0;
-                f.Priority = Math.Round(f.Cost * (1 + vBoost) * futureBoost * stableFactor, 1);
-            }
+                return f with { VolatilityLevel = level, Priority = Math.Round(f.Cost * (1 + vBoost) * futureBoost * stableFactor, 1) };
+            }).ToList();
 
             result.Findings = result.Findings.OrderByDescending(f => f.Priority).ThenByDescending(f => f.Cost).ToList();
             result.Summary = Scoring.Summarise(result.Findings, lines, result.Files.Count, settings);
@@ -148,8 +144,9 @@ namespace Connascence.Cli
                 try { files = Directory.GetFiles(dir); dirs = Directory.GetDirectories(dir); }
                 catch { continue; }
                 foreach (var f in files.OrderBy(x => x, StringComparer.Ordinal)) yield return f;
+                // Symlinked folders aren't followed: a link back up the tree would analyse the same files over and over.
                 foreach (var d in dirs.OrderByDescending(x => x, StringComparer.Ordinal))
-                    if (!SkipDirs.Contains(Path.GetFileName(d))) stack.Push(d);
+                    if (!SkipDirs.Contains(Path.GetFileName(d)) && new DirectoryInfo(d).LinkTarget == null) stack.Push(d);
             }
         }
 

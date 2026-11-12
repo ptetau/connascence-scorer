@@ -1,0 +1,3 @@
+[submodule "external/functional-csharp"]
+	path = external/functional-csharp
+	url = https://github.com/ptetau/functional-csharp

@@ -24,10 +24,10 @@ All weights are in `.connascence.json`. Nobody has validated them, so `connascen
 
 ## Quick start
 
-The tool isn't on NuGet yet. Build it and install it from the local package (needs the .NET 8 SDK):
+The tool isn't on NuGet yet. Build it and install it from the local package (needs the .NET 11 SDK):
 
 ```sh
-git clone https://github.com/ptetau/connascence-scorer && cd connascence-scorer
+git clone --recurse-submodules https://github.com/ptetau/connascence-scorer && cd connascence-scorer
 dotnet pack src/Connascence.Cli -o ./nupkg
 dotnet tool install -g Connascence.Tool --add-source ./nupkg
 ```
@@ -48,7 +48,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | Command | What it does |
 |---|---|
 | `analyze [path]` | Full report. `--format console\|markdown\|json\|sarif`, `--out file`, `--top N`, `--mode auto\|csharp\|generic`, `--no-git`, `--all` (include accepted) |
-| `check [path]` | The gate. Fails (exit 1) if a finding costing `maxFindingCost` or more is new or grew, and touches the changed files. `--staged`, `--since <ref>`, `--files a,b`, `--max-cost`, `--min-score` |
+| `check [path]` | The gate. Fails (exit 1) if a finding costing `maxFindingCost` or more is new or grew (more places, or higher cost), and touches the changed files. `--staged` checks what is staged, not the working tree. `--since <ref>`, `--files a,b`, `--max-cost`, `--min-score`. Exit 2 if git can't list the changed files |
 | `decide <id> accept\|refactor --reason "..." [--future F1]` | Records a decision. Accept also stops the finding failing the gate |
 | `accept <id> --reason "..."` | Same as `decide <id> accept` |
 | `reopen <id>` | Removes an acceptance |
@@ -83,7 +83,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | CNV02 | Value | The same limit checked in several places (`Length > 50`) |
 | CNI01 | Identity | Mutable static state used from several members |
 
-Tests, and mocks, fakes and stubs (`BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations (EF `Migrations/`, `migrations/`, Rails `db/migrate`, `DbScripts`, dated `2021-04-07_x.sql` and Flyway `V3__x.sql` scripts) are excluded.
+Tests, and mocks, fakes and stubs (`OrderTests.cs`, `BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`); names are matched as whole words, so `Latest.cs` and `Stubborn.cs` are analysed. Folders with these exact (case-sensitive) names are never read: `bin`, `obj`, `node_modules`, `packages`, `dist`, `build`, `out`, `target`, `vendor`, `venv`, `.venv`, `__pycache__`, `.next`, `.nuxt`, `coverage`, `TestResults` and editor folders. Symlinked folders aren't followed. Generated files and migrations (EF `Migrations/`, `migrations/`, Rails `db/migrate`, `DbScripts`, dated `2021-04-07_x.sql` and Flyway `V3__x.sql` scripts) are excluded.
 
 ## Generic mode
 
@@ -91,7 +91,7 @@ Files in other languages are read as text: repeated magic values and limits, boo
 
 ## Accepting inline
 
-A comment on a flagged line, or the line above, accepts the finding:
+A comment on a flagged line, or the line above, accepts the finding. If the finding grows after the baseline was taken, the accept lapses:
 
 ```csharp
 // connascence: accept - column order fixed by the bank's file spec
@@ -125,6 +125,8 @@ Reference the DLL with `<Analyzer Include="path/to/Connascence.Analyzers.dll" />
 
 ## Key settings
 
+In `scoring.strength` and `scoring.distanceWeight` you only need the keys you change: the rest keep their defaults, and key case doesn't matter. A key that names no kind or distance is reported as a warning.
+
 ```jsonc
 {
   "mode": "auto",                      // auto | csharp | generic
@@ -143,8 +145,10 @@ Reference the DLL with `<Analyzer Include="path/to/Connascence.Analyzers.dll" />
 ## Building
 
 ```sh
+git submodule update --init                     # external/functional-csharp (FunctionalLint), if you cloned without it
 dotnet build                                    # needs nuget.org for Microsoft.CodeAnalysis.CSharp
 dotnet run --project tests/Connascence.Tests    # unit tests
+python3 scripts/functional-gate.py              # FunctionalLint on Connascence.Core: no new violations
 python3 tests/scenarios/run.py                  # detection, change-prediction and gate scenarios
 tests/e2e.sh                                    # full workflow in a throwaway git repo (needs connascence on PATH)
 python3 tests/skills/run.py                     # skill evals: real Claude Code sessions, graded (costs API usage)
@@ -152,9 +156,11 @@ dotnet pack src/Connascence.Cli                 # the dotnet tool
 dotnet pack src/Connascence.Analyzers           # the analyzer package
 ```
 
-Offline, build against the Roslyn that ships inside the .NET SDK: `dotnet build -p:UseSdkRoslyn=true -p:RestoreSources=<empty folder>`. That works for the CLI and tests. The analyzer then has to target `net8.0` (`-p:AnalyzerTfm=net8.0`), which runs in `dotnet build` but not in Visual Studio.
+Offline, build against the Roslyn that ships inside the .NET SDK: `dotnet build -p:UseSdkRoslyn=true -p:RestoreSources=<empty folder>`. That works for the CLI and tests. The analyzer then has to target `net11.0` (`-p:AnalyzerTfm=net11.0`), which runs in `dotnet build` but not in Visual Studio.
 
 See `tests/scenarios/README.md` and `tests/skills/README.md` for what those suites check.
+
+`Connascence.Core` is a functional core, checked by [FunctionalLint](https://github.com/ptetau/functional-csharp). It is being migrated from imperative code: see [docs/functional-core.md](docs/functional-core.md).
 
 ## Known limits
 

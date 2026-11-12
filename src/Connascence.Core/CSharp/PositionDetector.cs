@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -11,154 +12,130 @@ namespace Connascence.CSharp
     /// CNP02: tuples that callers must unpack by position.
     /// CNP03: picking fields out of a split string by index.
     /// </summary>
-    public sealed class PositionDetector : ICSharpDetector
+    public sealed record PositionDetector : ICSharpDetector
     {
-        public IEnumerable<Finding> Detect(CSharpContext ctx)
-        {
-            return Parameters(ctx).Concat(Tuples(ctx)).Concat(Indexes(ctx));
-        }
+        public IEnumerable<Finding> Detect(CSharpContext ctx) =>
+            Parameters(ctx).Concat(Tuples(ctx)).Concat(Indexes(ctx));
 
-        IEnumerable<Finding> Parameters(CSharpContext ctx)
-        {
-            var s = ctx.Settings;
-            foreach (var root in ctx.Roots)
-            {
-                foreach (var decl in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
-                {
-                    var ps = decl.ParameterList?.Parameters;
-                    if (ps == null || ps.Value.Count < s.MinParametersForPosition) continue;
-                    var sameType = ps.Value.Where(p => p.Type != null)
-                        .GroupBy(p => p.Type.ToString()).OrderByDescending(g => g.Count()).FirstOrDefault();
-                    if (sameType == null || sameType.Count() < s.MinSameTypeParameters) continue;
+        static IEnumerable<Finding> Parameters(CSharpContext ctx) =>
+            ctx.Roots.SelectMany(root => root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
+                .Select(decl => Parameters(ctx, decl))
+                .OfType<Finding>();
 
-                    var symbol = ctx.Model(decl.SyntaxTree).GetDeclaredSymbol(decl) as IMethodSymbol;
-                    if (symbol == null) continue;
-                    var positional = ctx.CallsTo(symbol)
-                        .Where(c => c.Args.Arguments.Count >= 2 && c.Args.Arguments.Skip(1).Any(a => a.NameColon == null))
-                        .ToList();
-                    if (positional.Count == 0) continue;
-
-                    var name = decl is ConstructorDeclarationSyntax cd ? "new " + cd.Identifier.Text : symbol.Name;
-                    var locs = new List<CodeLocation> { ctx.Locate(decl.ParameterList, Roles.Declaration) };
-                    locs.AddRange(positional.Select(c => ctx.Locate(c.Node, Roles.CallSite)));
-                    var typeName = sameType.Key;
-                    var sameNames = string.Join(", ", sameType.Select(p => p.Identifier.Text).ToArray());
-
-                    yield return new Finding
-                    {
-                        RuleId = "CNP01",
-                        Kind = Kind.Position,
-                        Title = name + " takes " + ps.Value.Count + " parameters by position",
-                        GroupKey = symbol.ToDisplayString(),
-                        Locations = locs,
-                        Degree = positional.Count,
-                        Cause = name + " takes " + ps.Value.Count + " parameters, " + sameType.Count() + " of them " + typeName + " (" + sameNames + "). " +
-                                Text.CountVerb(positional.Count, "caller", "passes", "pass") + " them by position, so swapping two " + typeName +
-                                " values still compiles and silently gives the wrong result.",
-                        Suggestion = "Group the related values into a small type (for example a record holding " + sameNames +
-                                     "), or give each value its own type so mix-ups don't compile. Quick step: have callers use named arguments.",
-                        ChangeProbe = "If a parameter is added, removed or reordered, " + Text.All(positional.Count, "positional caller") +
-                                      " must change in step. Is that likely as this feature grows?",
-                    };
-                }
-            }
-        }
-
-        IEnumerable<Finding> Tuples(CSharpContext ctx)
+        static Finding? Parameters(CSharpContext ctx, BaseMethodDeclarationSyntax decl)
         {
             var s = ctx.Settings;
-            foreach (var root in ctx.Roots)
+            var ps = decl.ParameterList?.Parameters;
+            if (ps == null || ps.Value.Count < s.MinParametersForPosition) return null;
+            var sameType = ps.Value.Where(p => p.Type != null)
+                .GroupBy(p => p.Type!.ToString()).OrderByDescending(g => g.Count()).FirstOrDefault();
+            if (sameType == null || sameType.Count() < s.MinSameTypeParameters) return null;
+
+            var symbol = ctx.Model(decl.SyntaxTree).GetDeclaredSymbol(decl) as IMethodSymbol;
+            if (symbol == null) return null;
+            var positional = ctx.CallsTo(symbol)
+                .Where(c => c.Args.Arguments.Count >= 2 && c.Args.Arguments.Skip(1).Any(a => a.NameColon == null))
+                .ToImmutableArray();
+            if (positional.IsEmpty) return null;
+
+            var name = decl is ConstructorDeclarationSyntax cd ? "new " + cd.Identifier.Text : symbol.Name;
+            var locs = positional.Select(c => ctx.Locate(c.Node, Roles.CallSite)).Prepend(ctx.Locate(decl.ParameterList!, Roles.Declaration)).ToImmutableArray();
+            var typeName = sameType.Key;
+            var sameNames = string.Join(", ", sameType.Select(p => p.Identifier.Text).ToArray());
+
+            return new Finding
             {
-                foreach (var decl in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
-                {
-                    int elements;
-                    bool unnamed;
-                    if (decl.ReturnType is TupleTypeSyntax tt)
-                    {
-                        elements = tt.Elements.Count;
-                        unnamed = tt.Elements.Any(e => e.Identifier.IsKind(SyntaxKind.None));
-                    }
-                    else if (decl.ReturnType is GenericNameSyntax g && g.Identifier.Text == "Tuple")
-                    {
-                        elements = g.TypeArgumentList.Arguments.Count;
-                        unnamed = true;
-                    }
-                    else continue;
-
-                    if (elements < s.MinTupleElements && !unnamed) continue;
-                    if (elements < 2) continue;
-                    var symbol = ctx.Model(decl.SyntaxTree).GetDeclaredSymbol(decl);
-                    if (symbol == null) continue;
-                    var calls = ctx.CallsTo(symbol);
-                    if (calls.Count == 0) continue;
-
-                    var locs = new List<CodeLocation> { ctx.Locate(decl.ReturnType, Roles.Declaration) };
-                    locs.AddRange(calls.Select(c => ctx.Locate(c.Node, Roles.CallSite)));
-                    yield return new Finding
-                    {
-                        RuleId = "CNP02",
-                        Kind = Kind.Position,
-                        Title = decl.Identifier.Text + " returns a " + elements + "-part tuple",
-                        GroupKey = symbol.ToDisplayString(),
-                        Locations = locs,
-                        Degree = calls.Count,
-                        Cause = decl.Identifier.Text + " returns " + elements + " values in a tuple" + (unnamed ? " with unnamed parts" : "") + ". " +
-                                Text.Count(calls.Count, "caller") + " must unpack them in the right order.",
-                        Suggestion = "Return a small named type (a record) instead, so callers read values by name, not by position.",
-                        ChangeProbe = "If a value is added to or removed from the result, every caller that unpacks it must change. Is the result likely to grow?",
-                    };
-                }
-            }
+                RuleId = "CNP01",
+                Kind = Kind.Position,
+                Title = name + " takes " + ps.Value.Count + " parameters by position",
+                GroupKey = symbol.ToDisplayString(),
+                Locations = locs,
+                Degree = positional.Length,
+                Cause = name + " takes " + ps.Value.Count + " parameters, " + sameType.Count() + " of them " + typeName + " (" + sameNames + "). " +
+                        Text.CountVerb(positional.Length, "caller", "passes", "pass") + " them by position, so swapping two " + typeName +
+                        " values still compiles and silently gives the wrong result.",
+                Suggestion = "Group the related values into a small type (for example a record holding " + sameNames +
+                             "), or give each value its own type so mix-ups don't compile. Quick step: have callers use named arguments.",
+                ChangeProbe = "If a parameter is added, removed or reordered, " + Text.All(positional.Length, "positional caller") +
+                              " must change in step. Is that likely as this feature grows?",
+            };
         }
 
-        IEnumerable<Finding> Indexes(CSharpContext ctx)
+        static IEnumerable<Finding> Tuples(CSharpContext ctx) =>
+            ctx.Roots.SelectMany(root => root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+                .Select(decl => Tuples(ctx, decl))
+                .OfType<Finding>();
+
+        static Finding? Tuples(CSharpContext ctx, MethodDeclarationSyntax decl)
         {
-            foreach (var root in ctx.Roots)
+            var shape = decl.ReturnType switch
             {
-                var groups = new Dictionary<string, List<ElementAccessExpressionSyntax>>();
-                foreach (var ea in root.DescendantNodes().OfType<ElementAccessExpressionSyntax>())
-                {
-                    if (ea.ArgumentList.Arguments.Count != 1) continue;
-                    if (!ea.ArgumentList.Arguments[0].Expression.IsKind(SyntaxKind.NumericLiteralExpression)) continue;
-                    if (ea.Parent is AssignmentExpressionSyntax asg && asg.Left == ea) continue; // writing into an array is fine
+                TupleTypeSyntax tt => (Elements: tt.Elements.Count, Unnamed: tt.Elements.Any(e => e.Identifier.IsKind(SyntaxKind.None))),
+                GenericNameSyntax g when g.Identifier.Text == "Tuple" => (Elements: g.TypeArgumentList.Arguments.Count, Unnamed: true),
+                _ => ((int Elements, bool Unnamed)?)null,
+            };
+            if (shape is not { } tuple) return null;
+            var (elements, unnamed) = tuple;
 
-                    bool fromSplit = IsSplit(ea.Expression);
-                    if (!fromSplit)
-                    {
-                        var t = ctx.TypeOf(ea.Expression) as IArrayTypeSymbol;
-                        if (t == null || t.ElementType.SpecialType != SpecialType.System_String) continue;
-                        if (!IsLocalFromSplit(ea)) continue;
-                    }
-                    var key = CSharpContext.TypeNameOf(ea) + "." + CSharpContext.MemberNameOf(ea) + "|" + ea.Expression.ToString();
-                    List<ElementAccessExpressionSyntax> list;
-                    if (!groups.TryGetValue(key, out list)) { list = new List<ElementAccessExpressionSyntax>(); groups[key] = list; }
-                    list.Add(ea);
-                }
+            if (elements < ctx.Settings.MinTupleElements && !unnamed) return null;
+            if (elements < 2) return null;
+            var symbol = ctx.Model(decl.SyntaxTree).GetDeclaredSymbol(decl);
+            if (symbol == null) return null;
+            var calls = ctx.CallsTo(symbol);
+            if (calls.Count == 0) return null;
 
-                foreach (var kv in groups)
-                {
-                    var uses = kv.Value;
-                    var indices = uses.Select(u => u.ArgumentList.Arguments[0].ToString()).Distinct().ToList();
-                    var locs = uses.Select(u => ctx.Locate(u, Roles.Use)).ToList();
-                    var expr = uses[0].Expression.ToString();
-                    if (expr.Length > 40) expr = expr.Substring(0, 37) + "...";
-                    yield return new Finding
-                    {
-                        RuleId = "CNP03",
-                        Kind = Kind.Position,
-                        Title = "Fields read by index from " + expr,
-                        GroupKey = kv.Key,
-                        Locations = locs,
-                        Degree = indices.Count,
-                        FixedDistance = Distance.SameProject, // the format is defined by whoever wrote the string
-                        Cause = "This code reads " + Text.Count(indices.Count, "field") + " out of a split string by position (" +
-                                string.Join(", ", indices.Select(i => "[" + i + "]").ToArray()) +
-                                "). It depends on the exact field order chosen by whatever produced the string.",
-                        Suggestion = "Parse the string once, in one place next to the code that defines the format, into a small type with named properties. Or use a regex with named groups.",
-                        ChangeProbe = "If a field is added to or removed from the format, every index here shifts. Does the format come from somewhere that might change?",
-                    };
-                }
-            }
+            var locs = calls.Select(c => ctx.Locate(c.Node, Roles.CallSite)).Prepend(ctx.Locate(decl.ReturnType, Roles.Declaration)).ToImmutableArray();
+            return new Finding
+            {
+                RuleId = "CNP02",
+                Kind = Kind.Position,
+                Title = decl.Identifier.Text + " returns a " + elements + "-part tuple",
+                GroupKey = symbol.ToDisplayString(),
+                Locations = locs,
+                Degree = calls.Count,
+                Cause = decl.Identifier.Text + " returns " + elements + " values in a tuple" + (unnamed ? " with unnamed parts" : "") + ". " +
+                        Text.Count(calls.Count, "caller") + " must unpack them in the right order.",
+                Suggestion = "Return a small named type (a record) instead, so callers read values by name, not by position.",
+                ChangeProbe = "If a value is added to or removed from the result, every caller that unpacks it must change. Is the result likely to grow?",
+            };
+        }
+
+        /// <summary>Reads like parts[2] from a split string, grouped per member and expression, one finding per group, per file.</summary>
+        static IEnumerable<Finding> Indexes(CSharpContext ctx) =>
+            ctx.Roots.SelectMany(root => root.DescendantNodes().OfType<ElementAccessExpressionSyntax>()
+                .Where(ea => ReadsSplitField(ctx, ea))
+                .GroupBy(ea => CSharpContext.TypeNameOf(ea) + "." + CSharpContext.MemberNameOf(ea) + "|" + ea.Expression.ToString())
+                .Select(g => Indexes(ctx, g.Key, g.ToImmutableArray())));
+
+        static bool ReadsSplitField(CSharpContext ctx, ElementAccessExpressionSyntax ea)
+        {
+            if (ea.ArgumentList.Arguments.Count != 1) return false;
+            if (!ea.ArgumentList.Arguments[0].Expression.IsKind(SyntaxKind.NumericLiteralExpression)) return false;
+            if (ea.Parent is AssignmentExpressionSyntax asg && asg.Left == ea) return false; // writing into an array is fine
+            return IsSplit(ea.Expression)
+                || (ctx.TypeOf(ea.Expression) is IArrayTypeSymbol t && t.ElementType.SpecialType == SpecialType.System_String && IsLocalFromSplit(ea));
+        }
+
+        static Finding Indexes(CSharpContext ctx, string key, ImmutableArray<ElementAccessExpressionSyntax> uses)
+        {
+            var indices = uses.Select(u => u.ArgumentList.Arguments[0].ToString()).Distinct().ToImmutableArray();
+            var locs = uses.Select(u => ctx.Locate(u, Roles.Use)).ToImmutableArray();
+            var expr = Text.Quote(uses[0].Expression.ToString());
+            return new Finding
+            {
+                RuleId = "CNP03",
+                Kind = Kind.Position,
+                Title = "Fields read by index from " + expr,
+                GroupKey = key,
+                Locations = locs,
+                Degree = indices.Length,
+                FixedDistance = Distance.SameProject, // the format is defined by whoever wrote the string
+                Cause = "This code reads " + Text.Count(indices.Length, "field") + " out of a split string by position (" +
+                        string.Join(", ", indices.Select(i => "[" + i + "]").ToArray()) +
+                        "). It depends on the exact field order chosen by whatever produced the string.",
+                Suggestion = "Parse the string once, in one place next to the code that defines the format, into a small type with named properties. Or use a regex with named groups.",
+                ChangeProbe = "If a field is added to or removed from the format, every index here shifts. Does the format come from somewhere that might change?",
+            };
         }
 
         static bool IsSplit(ExpressionSyntax e) =>

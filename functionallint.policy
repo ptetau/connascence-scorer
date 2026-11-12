@@ -1,0 +1,25 @@
+# FunctionalLint policy: the owner's rules for Connascence.Core, the analyzer's functional core.
+# It's a globalconfig, so the build applies the same values the gate checks (scripts/functional-gate.py, the
+# pre-commit hook and CI). Agents: don't edit this file. CI checks pull requests against main's copy.
+# FunctionalLint itself lives in external/functional-csharp (a git submodule). See docs/functional-core.md.
+is_global = true
+global_level = 200
+
+# The functional core projects, relative to this file. The CLI, the Roslyn analyzer and the tests are shells.
+functional_lint.cores = src/Connascence.Core/Connascence.Core.csproj
+
+# Every rule is an error in the core: no rule may be lowered. The migration from imperative code is finished;
+# .functionallint-baseline.json is empty, and scripts/functional-gate.py fails if anything appears in it.
+functional_lint.may_lower = none
+
+# Namespaces of existing imperative code, which the rules skip and the core reaches only through adapters.
+functional_lint.legacy_namespaces = none
+
+# Where [ImperativeAdapter] may be used in the core. Core has no I/O, so nowhere.
+functional_lint.adapter_namespaces = none
+
+# What the core may reference besides the .NET base library: Roslyn, which it analyses code with.
+functional_lint.allowed_references = Microsoft.CodeAnalysis, Microsoft.CodeAnalysis.CSharp
+
+# Extra side-effecting APIs to report (FP0011), on top of the built-in list.
+functional_lint.impure_apis =

@@ -1,5 +1,6 @@
 #!/bin/sh
 # Connascence gate for this repo, using the analyzer built from this checkout (dogfooding the current code).
+# Then, when the commit touches Connascence.Core, the FunctionalLint gate (scripts/functional-gate.py).
 # Turn it on once per clone:  git config core.hooksPath .githooks
 # Agents: read the report, then follow the connascence-review skill (see CLAUDE.md).
 # Skip once with: git commit --no-verify
@@ -12,8 +13,24 @@ if [ -z "$dotnet" ]; then
   echo "connascence: dotnet not found; skipping the coupling check"
   exit 0
 fi
-if ! "$dotnet" build "$root/src/Connascence.Cli" -c Release -nologo -v q >/dev/null 2>&1; then
-  echo "connascence: the CLI doesn't build at this commit; skipping the coupling check"
-  exit 0
+# A commit that doesn't build can't be checked, and skipping would let it past both gates. Fix the build, or skip
+# once with --no-verify (CI still builds and checks it).
+if ! build_output=$("$dotnet" build "$root/src/Connascence.Cli" -c Release -nologo -v q 2>&1); then
+  echo "$build_output" | grep -E " error " | sort -u | head -20
+  echo "connascence: the CLI doesn't build, so this commit can't be checked. Fix the build (or commit with --no-verify)."
+  exit 1
 fi
-"$dotnet" "$root/src/Connascence.Cli/bin/Release/net8.0/connascence.dll" check --staged --no-git "$root"
+status=0
+"$dotnet" "$root/src/Connascence.Cli/bin/Release/net11.0/connascence.dll" check --staged --no-git "$root" || status=1
+
+# FunctionalLint: Connascence.Core is a functional core (see docs/functional-core.md).
+if git diff --cached --name-only | grep -qE '^(src/Connascence\.Core/|functionallint\.policy$|\.functionallint-baseline\.json$|external/functional-csharp$)'; then
+  if [ ! -f "$root/external/functional-csharp/FunctionalLint/heal.sh" ]; then
+    echo "functional gate: external/functional-csharp is missing (git submodule update --init); skipping"
+  elif ! command -v python3 >/dev/null 2>&1; then
+    echo "functional gate: python3 not found; skipping"
+  else
+    PATH="$(dirname "$dotnet"):$PATH" python3 "$root/scripts/functional-gate.py" || status=1
+  fi
+fi
+exit $status

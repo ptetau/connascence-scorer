@@ -85,7 +85,7 @@ namespace Connascence.Analyzers
             var ctx = new CSharpContext(compilation, files, new Settings());
             var byPath = trees.GroupBy(t => t.FilePath).ToDictionary(g => g.Key, g => g.First());
 
-            foreach (var f in CSharpEngine.Analyze(ctx))
+            foreach (var f in CSharpEngine.Analyze(ctx).Findings)
             {
                 end.CancellationToken.ThrowIfCancellationRequested();
                 DiagnosticDescriptor rule;

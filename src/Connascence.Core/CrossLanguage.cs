@@ -1,5 +1,5 @@
-using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 
 namespace Connascence
@@ -12,48 +12,58 @@ namespace Connascence
     /// </summary>
     public static class CrossLanguage
     {
-        static readonly Dictionary<string, string> Pairs = new Dictionary<string, string>
-        {
-            ["CNM01"] = "GNM01",
-            ["CNV02"] = "GNV02",
-        };
+        /// <summary>C# rule and the generic rule that reports the same thing, in the order they are merged.</summary>
+        static readonly ImmutableArray<(string CSharp, string Generic)> Pairs =
+            ImmutableArray.Create(("CNM01", "GNM01"), ("CNV02", "GNV02"));
 
-        public static List<Finding> Merge(List<Finding> findings, Settings settings)
+        public static IReadOnlyList<Finding> Merge(IReadOnlyList<Finding> findings, Settings settings)
         {
-            var removed = new HashSet<Finding>();
-            foreach (var pair in Pairs)
+            var merged = Pairs.Aggregate(Merged.None, (state, pair) => MergePair(findings, pair, state, settings));
+            return findings.Where(f => !merged.Gone.Contains(f))
+                .Select(f => merged.Replaced.TryGetValue(f, out var updated) ? updated : f)
+                .ToImmutableArray();
+        }
+
+        /// <summary>Generic findings folded away, and C# findings with their new versions (both keyed by identity).</summary>
+        sealed record Merged(ImmutableHashSet<Finding> Gone, ImmutableDictionary<Finding, Finding> Replaced)
+        {
+            public static readonly Merged None = new(ImmutableHashSet<Finding>.Empty, ImmutableDictionary<Finding, Finding>.Empty);
+        }
+
+        /// <summary>Folds each generic finding into the C# finding with the same key.</summary>
+        static Merged MergePair(IReadOnlyList<Finding> findings, (string CSharp, string Generic) pair, Merged merged, Settings settings)
+        {
+            var generic = findings.Where(f => f.RuleId == pair.Generic && f.GroupKey != null)
+                .GroupBy(f => Key(f.GroupKey!)).ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray());
+            return findings.Where(f => f.RuleId == pair.CSharp && f.GroupKey != null).ToImmutableArray()
+                .Aggregate(merged, (state, cs) =>
+                    generic.TryGetValue(Key(cs.GroupKey!), out var others) && others.FirstOrDefault(o => !state.Gone.Contains(o)) is { } other
+                        ? new Merged(state.Gone.Add(other), state.Replaced.SetItem(cs, Absorb(cs, other, settings)))
+                        : state);
+        }
+
+        /// <summary>The C# finding with the generic finding's places added, rescored.</summary>
+        static Finding Absorb(Finding cs, Finding other, Settings settings)
+        {
+            var languages = other.Locations.Select(l => System.IO.Path.GetExtension(l.File).TrimStart('.')).Where(x => x.Length > 0).Distinct().ToImmutableArray();
+            var degree = cs.Degree + other.Degree;
+            return Scoring.Score(cs with
             {
-                var generic = findings.Where(f => f.RuleId == pair.Value && f.GroupKey != null)
-                    .GroupBy(f => Key(f.GroupKey)).ToDictionary(g => g.Key, g => g.ToList());
-                foreach (var cs in findings.Where(f => f.RuleId == pair.Key && f.GroupKey != null).ToList())
-                {
-                    List<Finding> others;
-                    if (!generic.TryGetValue(Key(cs.GroupKey), out others)) continue;
-                    var other = others.FirstOrDefault(o => !removed.Contains(o));
-                    if (other == null) continue;
-                    removed.Add(other);
-
-                    var languages = other.Locations.Select(l => System.IO.Path.GetExtension(l.File).TrimStart('.')).Where(x => x.Length > 0).Distinct().ToList();
-                    cs.Locations.AddRange(other.Locations);
-                    var before = cs.Degree;
-                    cs.Degree += other.Degree;
-                    if (cs.ChangeProbe != null)
-                        cs.ChangeProbe = cs.ChangeProbe.Replace(Text.All(before, "place"), Text.All(cs.Degree, "place"));
-                    cs.Cause += " The same value is also used " + Text.Spread(other.Locations) + " in " + Text.Join(languages) +
-                                " code, which the C# compiler never sees, so a missed place there fails only at run time.";
-                    Scoring.Score(cs, settings);
-                }
-            }
-            return findings.Where(f => !removed.Contains(f)).ToList();
+                Locations = cs.Locations.Concat(other.Locations).ToImmutableArray(),
+                Degree = degree,
+                ChangeProbe = cs.ChangeProbe.Replace(Text.All(cs.Degree, "place"), Text.All(degree, "place")),
+                Cause = cs.Cause + " The same value is also used " + Text.Spread(other.Locations) + " in " + Text.Join(languages) +
+                        " code, which the C# compiler never sees, so a missed place there fails only at run time.",
+            }, settings);
         }
 
         /// <summary>"num|3|order_status" and "num|3|orderstatus" are the same subject.</summary>
         static string Key(string groupKey)
         {
             var parts = groupKey.Split('|');
-            if (parts.Length < 3) return groupKey;
-            parts[parts.Length - 1] = parts[parts.Length - 1].Replace("_", "").Replace("-", "").ToLowerInvariant();
-            return string.Join("|", parts);
+            return parts.Length < 3
+                ? groupKey
+                : string.Join("|", parts.Take(parts.Length - 1).Append(parts[parts.Length - 1].Replace("_", "").Replace("-", "").ToLowerInvariant()));
         }
     }
 }
