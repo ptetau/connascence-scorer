@@ -38,7 +38,8 @@ namespace Connascence.Generic
         static readonly Regex TimerCall = new Regex(@"\b(?<call>setTimeout|setInterval)\s*\(.*,\s*(?<ms>\d[\d_]*)\s*\)");
         static readonly Regex Call = new Regex(@"(?<![\w.$])(?<fn>[A-Za-z_$][\w$]*)\s*\((?<args>[^()]*)\)");
         static readonly Regex Def = new Regex(@"\b(?:def|function|func|fn|sub|proc|fun)\s+(?:\([^)]*\)\s*)?(?<name>[A-Za-z_$][\w$]*)\s*(?:<[^>]*>)?\s*\((?<params>[^)]*)\)");
-        static readonly Regex MethodDef = new Regex(@"^\s*(?:(?:public|private|protected|internal|static|final|override|async|virtual|abstract|export)\s+)*[\w<>\[\],.?]+\s+(?<name>[A-Za-z_]\w*)\s*\((?<params>[^()]*)\)\s*(?:throws [\w, .]+)?\s*\{?\s*$");
+        // The type slot can't be a keyword: "return f(1, 2)" and "new Order(id)" are calls, not definitions.
+        static readonly Regex MethodDef = new Regex(@"^\s*(?:(?:public|private|protected|internal|static|final|override|async|virtual|abstract|export)\s+)*(?!(?:return|new|throw|await|yield|else|case|in|is|not|and|or|print|echo|delete|typeof|goto|then|do)\b)[\w<>\[\],.?]+\s+(?<name>[A-Za-z_]\w*)\s*\((?<params>[^()]*)\)\s*(?:throws [\w, .]+)?\s*\{?\s*$");
         static readonly Regex Sleep = new Regex(@"\b(?<call>time\.sleep|Thread\.sleep|Thread\.Sleep|Task\.Delay|usleep|sleep|setTimeout|delay)\s*\((?<args>[^()]*)\)");
         static readonly Regex PyGlobal = new Regex(@"^\s*global\s+(?<names>[\w, ]+)");
         static readonly Regex RubyGlobal = new Regex(@"(?<![\w])\$(?<name>[a-z_]\w*)\s*(?:=[^=]|\+=|-=|<<)");
@@ -249,23 +250,37 @@ namespace Connascence.Generic
 
         // ---------- Long parameter lists ----------
 
-        static IEnumerable<Finding> LongParameterLists(IReadOnlyList<TextFile> files, DefinitionIndex defs, Settings s) =>
-            defs.InOrder
+        /// <summary>A call found in the text: which function, its argument list, and where.</summary>
+        sealed record CallSite(string Function, string Args, TextFile File, int Line);
+
+        static IEnumerable<Finding> LongParameterLists(IReadOnlyList<TextFile> files, DefinitionIndex defs, Settings s)
+        {
+            var candidates = defs.InOrder
                 .Where(x => x.Definitions.Length == 1) // overloads make call matching unreliable
                 .Select(x => x.Definitions[0])
                 .Where(def => def.Params.Count >= s.MinGenericParameters)
-                .Select(def => LongParameterList(files, def))
-                .OfType<Finding>();
+                .ToImmutableArray();
+            if (candidates.IsEmpty) return Enumerable.Empty<Finding>();
 
-        static Finding? LongParameterList(IReadOnlyList<TextFile> files, Definition def)
+            // One pass over the code for every candidate's calls (a regex per function made this quadratic on large repos).
+            var names = candidates.Select(d => d.Name).ToImmutableHashSet();
+            var callsByName = files
+                .SelectMany(f => CodeLines(f).SelectMany(cl => Call.Matches(cl.Value).Cast<Match>()
+                    .Where(m => names.Contains(m.Groups["fn"].Value))
+                    .Select(m => new CallSite(m.Groups["fn"].Value, m.Groups["args"].Value, f, cl.Key))))
+                .GroupBy(c => c.Function)
+                .ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray());
+            return candidates
+                .Select(def => LongParameterList(def, callsByName.TryGetValue(def.Name, out var calls) ? calls : ImmutableArray<CallSite>.Empty))
+                .OfType<Finding>();
+        }
+
+        static Finding? LongParameterList(Definition def, ImmutableArray<CallSite> sites)
         {
-            var rx = new Regex(@"(?<![\w.$])" + Regex.Escape(def.Name) + @"\s*\((?<args>[^()]*)\)");
-            var calls = files.SelectMany(f => CodeLines(f)
-                    .Where(cl => !(f == def.File && cl.Key == def.Line))
-                    .SelectMany(cl => rx.Matches(cl.Value).Cast<Match>()
-                        .Select(m => m.Groups["args"].Value.Split(','))
-                        .Where(args => args.Length >= 2 && !args.Skip(1).All(a => a.Contains("=") || a.Contains(":"))) // not all named
-                        .Select(_ => Loc(f, cl.Key, "call site"))))
+            var calls = sites
+                .Where(c => !(c.File == def.File && c.Line == def.Line))
+                .Where(c => c.Args.Split(',') is var args && args.Length >= 2 && !args.Skip(1).All(a => a.Contains("=") || a.Contains(":"))) // not all named
+                .Select(c => Loc(c.File, c.Line, "call site"))
                 .ToImmutableArray();
             if (calls.IsEmpty) return null;
             var locs = calls.Prepend(Loc(def.File, def.Line, "declaration")).ToImmutableArray();

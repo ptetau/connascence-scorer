@@ -94,6 +94,16 @@ var tests = new List<(string Name, Action Body)>
         var f = Scoring.Score(new Finding { RuleId = "X", Kind = Kind.Meaning, Degree = 4, FixedDistance = Distance.CrossProject, Locations = new[] { new CodeLocation { File = "a", Project = "p" } } }, s);
         Assert(Math.Abs(f.Cost - 3 * 4 * 2.0) < 0.001, "cost was " + f.Cost);
     }),
+    ("a partial weight map falls back to the defaults, ignoring key case", () =>
+    {
+        var s = new Settings { DistanceWeight = new Dictionary<string, double> { ["crossProject"] = 3 } };
+        Assert(s.WeightOf(Distance.CrossProject) == 3, "crossProject should apply, got " + s.WeightOf(Distance.CrossProject));
+        Assert(s.WeightOf(Distance.SameType) == 0.25, "SameType should keep its default, got " + s.WeightOf(Distance.SameType));
+        Assert(!s.UnknownKeys().Any(), "crossProject is a known key");
+        var typo = new Settings { Strength = new Dictionary<string, double> { ["Meening"] = 9 } };
+        Assert(typo.UnknownKeys().SequenceEqual(new[] { "strength.Meening" }), "a misspelt kind should be reported");
+        Assert(typo.StrengthOf(Kind.Meaning) == 3, "Meaning should keep its default");
+    }),
     ("generic mode finds a repeated status code and a fixed sleep in Python", () =>
     {
         var files = new List<TextFile>

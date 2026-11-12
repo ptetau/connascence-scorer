@@ -12,6 +12,10 @@
 - Growth includes cost: a finding whose places moved further apart (same count, higher cost) fails like one that
   gained places. An inline accept lapses when its finding grows past its size in the baseline. The baseline now
   records accepted findings' sizes too; run `connascence baseline` again to get this for existing inline accepts.
+- Generic mode: `return f(...)` is no longer read as a definition of `f`, and the long-parameter check reads the
+  code once instead of once per function (45 s to under 2 s on 25k lines of Python).
+- `scoring.strength` and `scoring.distanceWeight` merge over the defaults and ignore key case; unknown keys are warned
+  about. Before, a partial map dropped the other defaults to 1.
 - Core API: findings are immutable records, `Scoring.Score` returns the scored finding, and `CSharpEngine.Analyze`
   returns detector warnings with the findings instead of adding them to the context.
 

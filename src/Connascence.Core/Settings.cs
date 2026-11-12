@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Linq;
 
 namespace Connascence
 {
@@ -13,12 +14,10 @@ namespace Connascence
         // ---- Scoring ----
 
         /// <summary>Strength rank per kind. Name and Type default to 0: they are the healthy kinds and are not scored.</summary>
-        public IReadOnlyDictionary<string, double>? Strength { get; init; } = ImmutableSortedDictionary.Create<string, double>(InEnumOrder<Kind>())
-            .SetItem("Name", 0).SetItem("Type", 0).SetItem("Meaning", 3).SetItem("Position", 4).SetItem("Algorithm", 5).SetItem("Execution", 6).SetItem("Timing", 7).SetItem("Value", 8).SetItem("Identity", 9);
+        public IReadOnlyDictionary<string, double>? Strength { get; init; } = DefaultStrength;
 
         /// <summary>Multiplier per distance. Strong coupling close together is cheap; across projects it is dear.</summary>
-        public IReadOnlyDictionary<string, double>? DistanceWeight { get; init; } = ImmutableSortedDictionary.Create<string, double>(InEnumOrder<Distance>())
-            .SetItem("SameMember", 0.1).SetItem("SameType", 0.25).SetItem("SameFile", 0.5).SetItem("SameProject", 1.0).SetItem("CrossProject", 2.0);
+        public IReadOnlyDictionary<string, double>? DistanceWeight { get; init; } = DefaultDistanceWeight;
 
         /// <summary>Cost grows as degree^DegreeExponent. 1 = linear (each extra place is one more edit).</summary>
         public double DegreeExponent { get; init; } = 1.0;
@@ -50,15 +49,33 @@ namespace Connascence
         public IReadOnlyList<string> InitMethodPrefixes { get; init; } = ImmutableArray.Create(
             "Init", "Initialize", "Initialise", "Open", "Start", "Connect", "Begin", "Setup", "SetUp", "Configure", "Load", "Prepare");
 
-        public double StrengthOf(Kind kind)
-        {
-            return Strength != null && Strength.TryGetValue(kind.ToString(), out var v) ? v : (int)kind;
-        }
+        static readonly ImmutableSortedDictionary<string, double> DefaultStrength = ImmutableSortedDictionary.Create<string, double>(InEnumOrder<Kind>())
+            .SetItem("Name", 0).SetItem("Type", 0).SetItem("Meaning", 3).SetItem("Position", 4).SetItem("Algorithm", 5).SetItem("Execution", 6).SetItem("Timing", 7).SetItem("Value", 8).SetItem("Identity", 9);
 
-        public double WeightOf(Distance d)
-        {
-            return DistanceWeight != null && DistanceWeight.TryGetValue(d.ToString(), out var v) ? v : 1.0;
-        }
+        static readonly ImmutableSortedDictionary<string, double> DefaultDistanceWeight = ImmutableSortedDictionary.Create<string, double>(InEnumOrder<Distance>())
+            .SetItem("SameMember", 0.1).SetItem("SameType", 0.25).SetItem("SameFile", 0.5).SetItem("SameProject", 1.0).SetItem("CrossProject", 2.0);
+
+        /// <summary>The configured strength for a kind (key case ignored), or the default when the config leaves it out.</summary>
+        public double StrengthOf(Kind kind) =>
+            Lookup(Strength, kind.ToString()) ?? Lookup(DefaultStrength, kind.ToString()) ?? (int)kind;
+
+        /// <summary>The configured weight for a distance (key case ignored), or the default when the config leaves it out.</summary>
+        public double WeightOf(Distance d) =>
+            Lookup(DistanceWeight, d.ToString()) ?? Lookup(DefaultDistanceWeight, d.ToString()) ?? 1.0;
+
+        static double? Lookup(IReadOnlyDictionary<string, double>? map, string key) =>
+            map == null ? null
+            : map.TryGetValue(key, out var exact) ? exact
+            : map.Where(kv => string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase)).Select(kv => (double?)kv.Value).FirstOrDefault();
+
+        /// <summary>Keys in the strength and distance-weight maps that name no kind or distance, so they are ignored.</summary>
+        public IEnumerable<string> UnknownKeys() =>
+            Unknown<Kind>(Strength, "strength").Concat(Unknown<Distance>(DistanceWeight, "distanceWeight"));
+
+        static IEnumerable<string> Unknown<TEnum>(IReadOnlyDictionary<string, double>? map, string name) where TEnum : struct =>
+            (map ?? ImmutableSortedDictionary<string, double>.Empty).Keys
+                .Where(k => !Enum.GetNames(typeof(TEnum)).Any(n => string.Equals(n, k, StringComparison.OrdinalIgnoreCase)))
+                .Select(k => name + "." + k);
 
         /// <summary>
         /// Orders keys that name an enum member (Kind, Distance) as the enum does, so the config `init` writes reads

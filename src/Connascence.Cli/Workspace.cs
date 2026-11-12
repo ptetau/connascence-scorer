@@ -58,6 +58,7 @@ namespace Connascence.Cli
             var excludes = config.Exclude.Select(Glob.ToRegex).ToList();
             var settings = config.Scoring;
             var result = new AnalysisResult { Root = root, Mode = mode };
+            result.Warnings.AddRange(settings.UnknownKeys().Select(k => "Unknown setting " + k + " in .connascence.json is ignored. Use a kind (Meaning, Position ...) or distance (SameType, CrossProject ...) name."));
 
             var csharp = new List<SourceInput>();
             var generic = new List<TextFile>();

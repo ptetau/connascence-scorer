@@ -121,6 +121,8 @@ dotnet_diagnostic.CNM01.severity = suggestion
 
 ## Key settings
 
+In `scoring.strength` and `scoring.distanceWeight` you only need the keys you change: the rest keep their defaults, and key case doesn't matter. A key that names no kind or distance is reported as a warning.
+
 ```jsonc
 {
   "mode": "auto",                      // auto | csharp | generic
