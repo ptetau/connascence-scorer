@@ -15,7 +15,7 @@ If the user asked only for a review, stop at recommendations: report each findin
 - Before a commit, or when the hook failed: `connascence check --staged --format markdown`
 - For a wider review: `connascence analyze --format markdown --top 30`
 
-Each finding has an id, a cause, a suggested fix, a change probe, the places involved, and the futures that touch it. A finding marked "grew from N to M places" means this change made existing coupling worse.
+Each finding has an id, a cause, a suggested fix, a change probe, the places involved, and the futures that touch it. A finding marked "grew from N to M places" or "grew in cost" means this change made existing coupling worse: more places, or the same places further apart. An inline accept lapses when its finding grows, and the report says so.
 
 ## 2. Make sure there are futures
 

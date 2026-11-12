@@ -1,0 +1,51 @@
+{
+  "description": "Coupling that keeps the same number of places but spreads them across projects costs more, and is blocked like coupling that gained places. Here a limit checked three times in one class moves into three projects (cost 6 to 48).",
+  "fixture": "tally",
+  "steps": [
+    {
+      "write": "Tally.Domain/Names.cs",
+      "content": "namespace Tally.Domain\n{\n    public class Names\n    {\n        public bool TooLongForInvoice(string name) => name.Length > 50;\n        public bool TooLongForCustomer(string name) => name.Length > 50;\n        public bool TooLongForProduct(string name) => name.Length > 50;\n    }\n}\n"
+    },
+    {
+      "baseline": true
+    },
+    {
+      "commit": "baseline"
+    },
+    {
+      "write": "Tally.Domain/Names.cs",
+      "content": "namespace Tally.Domain\n{\n    public class Names\n    {\n        public bool TooLongForInvoice(string name) => name.Length > 50;\n    }\n}\n"
+    },
+    {
+      "write": "Tally.Api/CustomerForm.cs",
+      "content": "namespace Tally.Api\n{\n    public class CustomerForm\n    {\n        public bool TooLong(string name) => name.Length > 50;\n    }\n}\n"
+    },
+    {
+      "write": "Tally.Billing/ProductNames.cs",
+      "content": "namespace Tally.Billing\n{\n    public class ProductNames\n    {\n        public bool TooLong(string name) => name.Length > 50;\n    }\n}\n"
+    },
+    {
+      "stage": true
+    },
+    {
+      "label": "same three places, now across projects",
+      "expectFinding": {
+        "rule": "CNV02",
+        "groupKey": "limit|50|length",
+        "degree": 3,
+        "distance": "CrossProject"
+      }
+    },
+    {
+      "label": "check --staged fails and says the cost grew",
+      "run": [
+        "check",
+        "--staged"
+      ],
+      "exit": 1,
+      "contains": [
+        "grew in cost from"
+      ]
+    }
+  ]
+}

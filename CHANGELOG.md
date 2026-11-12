@@ -6,6 +6,12 @@
   netstandard2.0). Install the .NET 11 SDK or runtime before updating the tool.
 - `Connascence.Core` is now a functional core, checked by FunctionalLint (see `docs/functional-core.md`).
   Findings are unchanged. On .NET 11 a per-file cost in the summary can differ by 0.1 from .NET 8, from rounding.
+- `check` fails closed: if git can't list the changed files (a missing ref, a shallow clone), it exits 2 instead of
+  passing. File names with non-ASCII characters and roots reached through a symlink now match.
+- `check --staged` analyses what is staged (git's index), not the working tree.
+- Growth includes cost: a finding whose places moved further apart (same count, higher cost) fails like one that
+  gained places. An inline accept lapses when its finding grows past its size in the baseline. The baseline now
+  records accepted findings' sizes too; run `connascence baseline` again to get this for existing inline accepts.
 - Core API: findings are immutable records, `Scoring.Score` returns the scored finding, and `CSharpEngine.Analyze`
   returns detector warnings with the findings instead of adding them to the context.
 

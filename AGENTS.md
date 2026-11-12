@@ -115,8 +115,8 @@ A finding fails the check when all of these hold:
 - it isn't accepted (by `decide ... accept` or an inline comment)
 - it isn't in the baseline (with the default `failOn: "new"`)
 - at least one of its places is in the changed files
-- it is **new**, or it **grew** (a place joined it). A finding that shrank, or kept the same size with its places
-  moved around, doesn't fail.
+- it is **new**, or it **grew**: a place joined it, or its places moved further apart so it costs more. A finding
+  that shrank, or kept the same size and cost with its places moved around, doesn't fail.
 
 The check also fails if `minScore` is above 0 and the score is below it.
 
@@ -134,7 +134,7 @@ Each finding has:
 - **`cost`**: strength × degree × distance weight.
 - **`priority`**: cost, raised for files that change often in git and for futures that touch the finding, and lowered for stable areas.
 - **`futures`**: ids of the futures that touch it.
-- **`change`**: compared with the baseline, one of `new`, `grew from N to M places`, `shrank from ...` or `changed places`. It is absent when the finding is unchanged or there is no baseline.
+- **`change`**: compared with the baseline, one of `new`, `grew from N to M places`, `grew in cost from X to Y`, `shrank from ...` or `changed places`. It is absent when the finding is unchanged or there is no baseline.
 - **`accepted`, `acceptedReason`, `inBaseline`, `stableReason`**: its status.
 - **`fingerprint`**: the **id**.
 
@@ -148,7 +148,10 @@ The JSON report has the same fields in `findings[]`, plus `summary` (`score`, `l
 ## Accepting inline
 
 A comment containing `connascence: accept` on any one of a finding's places, or on the line above it, accepts
-the whole finding. The rest of the comment is the reason. It works in any language's comment syntax:
+the whole finding. The rest of the comment is the reason. Like an accept recorded with `decide`, it covers the
+coupling at its size when the baseline was taken: if the finding grows after that, the accept lapses and the check
+fails until someone looks again (and re-runs `connascence baseline` once it is fine). Without a baseline there is
+nothing to compare with, so an inline accept keeps applying. It works in any language's comment syntax:
 
 ```csharp
 // connascence: accept - column order fixed by the bank's file spec

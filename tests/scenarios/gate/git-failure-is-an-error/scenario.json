@@ -1,0 +1,47 @@
+{
+  "description": "When git can't list the changed files (a ref that doesn't exist, as in a shallow CI clone), the check stops with an error instead of passing with nothing to check.",
+  "fixture": "tally",
+  "steps": [
+    {
+      "baseline": true
+    },
+    {
+      "commit": "baseline"
+    },
+    {
+      "write": "Tally.Billing/Refunds.cs",
+      "content": "using System.Collections.Generic;\nnamespace Tally.Billing\n{\n    public static class RefundQueue\n    {\n        public static List<string> Pending = new List<string>();\n    }\n\n    public class Refunds\n    {\n        public void Request(string invoiceId) { RefundQueue.Pending.Add(invoiceId); }\n        public void Clear() { RefundQueue.Pending.Clear(); }\n    }\n}\n"
+    },
+    {
+      "write": "Tally.Api/RefundsController.cs",
+      "content": "namespace Tally.Api\n{\n    public class RefundsController\n    {\n        public int Waiting() => Tally.Billing.RefundQueue.Pending.Count;\n        public bool Queued(string id) => Tally.Billing.RefundQueue.Pending.Contains(id);\n    }\n}\n"
+    },
+    {
+      "commit": "add refunds"
+    },
+    {
+      "label": "--since a missing ref exits 2",
+      "run": [
+        "check",
+        "--since",
+        "origin/no-such-branch"
+      ],
+      "exit": 2,
+      "contains": [
+        "couldn't list"
+      ]
+    },
+    {
+      "label": "--since a real ref still fails the coupling",
+      "run": [
+        "check",
+        "--since",
+        "HEAD~1"
+      ],
+      "exit": 1,
+      "contains": [
+        "RefundQueue.Pending"
+      ]
+    }
+  ]
+}

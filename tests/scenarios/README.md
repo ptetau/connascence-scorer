@@ -50,5 +50,5 @@ Add `why` to say what it's for and `gap` to mark a known weakness.
 
 **gate**: `steps`, run in order inside a fresh git repo of the fixture:
 `baseline`, `commit`, `write` / `append` / `replace` (edit files), `stage`,
-`run` (CLI args; `exit`, `contains`, `lacks`), `decide` (`accept|refactor` on a `finding` matcher or remembered `id`,
+`run` (CLI args, run on the fixture's root; `exit`, `contains`, `lacks`; `viaSymlink` passes the root through a symlink), `decide` (`accept|refactor` on a `finding` matcher or remembered `id`,
 with `reason`, `future`, `exit`), `remember` (store a finding's id), `reopenId`, `expectFinding` (matcher, `count`).

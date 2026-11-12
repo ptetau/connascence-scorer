@@ -48,7 +48,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | Command | What it does |
 |---|---|
 | `analyze [path]` | Full report. `--format console\|markdown\|json\|sarif`, `--out file`, `--top N`, `--mode auto\|csharp\|generic`, `--no-git`, `--all` (include accepted) |
-| `check [path]` | The gate. Fails (exit 1) if a finding costing `maxFindingCost` or more is new or grew, and touches the changed files. `--staged`, `--since <ref>`, `--files a,b`, `--max-cost`, `--min-score` |
+| `check [path]` | The gate. Fails (exit 1) if a finding costing `maxFindingCost` or more is new or grew (more places, or higher cost), and touches the changed files. `--staged` checks what is staged, not the working tree. `--since <ref>`, `--files a,b`, `--max-cost`, `--min-score`. Exit 2 if git can't list the changed files |
 | `decide <id> accept\|refactor --reason "..." [--future F1]` | Records a decision. Accept also stops the finding failing the gate |
 | `accept <id> --reason "..."` | Same as `decide <id> accept` |
 | `reopen <id>` | Removes an acceptance |
@@ -91,7 +91,7 @@ Files in other languages are read as text: repeated magic values and limits, boo
 
 ## Accepting inline
 
-A comment on a flagged line, or the line above, accepts the finding:
+A comment on a flagged line, or the line above, accepts the finding. If the finding grows after the baseline was taken, the accept lapses:
 
 ```csharp
 // connascence: accept - column order fixed by the bank's file spec

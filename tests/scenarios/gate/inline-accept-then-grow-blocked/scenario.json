@@ -1,0 +1,55 @@
+{
+  "description": "An inline accept covers the coupling as it was when the baseline was taken. When more places join it later, the accept lapses and the commit is blocked, the same as for an accept recorded with decide.",
+  "fixture": "tally",
+  "steps": [
+    {
+      "write": "Tally.Billing/Refunds.cs",
+      "content": "using System.Collections.Generic;\nnamespace Tally.Billing\n{\n    public static class RefundQueue\n    {\n        // connascence: accept - single-instance by design until the queue moves to the database\n        public static List<string> Pending = new List<string>();\n    }\n\n    public class Refunds\n    {\n        public void Request(string invoiceId) { RefundQueue.Pending.Add(invoiceId); }\n    }\n}\n"
+    },
+    {
+      "write": "Tally.Api/RefundsController.cs",
+      "content": "namespace Tally.Api\n{\n    public class RefundsController\n    {\n        public int Waiting() => Tally.Billing.RefundQueue.Pending.Count;\n    }\n}\n"
+    },
+    {
+      "label": "accepted inline at first",
+      "expectFinding": {
+        "rule": "CNI01",
+        "titleContains": "RefundQueue",
+        "accepted": true
+      }
+    },
+    {
+      "baseline": true
+    },
+    {
+      "commit": "baseline"
+    },
+    {
+      "label": "unchanged, it still passes",
+      "run": [
+        "check",
+        "--staged"
+      ],
+      "exit": 0
+    },
+    {
+      "write": "Tally.Api/RefundAdmin.cs",
+      "content": "namespace Tally.Api\n{\n    public class RefundAdmin\n    {\n        public void Drop(string id) { Tally.Billing.RefundQueue.Pending.Remove(id); }\n        public bool Has(string id) => Tally.Billing.RefundQueue.Pending.Contains(id);\n        public void Reset() { Tally.Billing.RefundQueue.Pending.Clear(); }\n    }\n\n    public class RefundReport\n    {\n        public string Summary() => Tally.Billing.RefundQueue.Pending.Count + \" waiting\";\n    }\n}\n"
+    },
+    {
+      "stage": true
+    },
+    {
+      "label": "grown, check --staged fails",
+      "run": [
+        "check",
+        "--staged"
+      ],
+      "exit": 1,
+      "contains": [
+        "RefundQueue.Pending",
+        "inline accept was for the smaller coupling"
+      ]
+    }
+  ]
+}

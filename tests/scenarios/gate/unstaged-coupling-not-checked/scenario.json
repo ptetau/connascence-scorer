@@ -1,0 +1,38 @@
+{
+  "description": "Coupling that exists only in unstaged edits isn't part of the commit, so check --staged passes.",
+  "fixture": "tally",
+  "steps": [
+    {
+      "baseline": true
+    },
+    {
+      "commit": "baseline"
+    },
+    {
+      "write": "Tally.Api/Notes.cs",
+      "content": "namespace Tally.Api\n{\n    public class Notes\n    {\n        public string Title => \"notes\";\n    }\n}\n"
+    },
+    {
+      "stage": true
+    },
+    {
+      "write": "Tally.Billing/Refunds.cs",
+      "content": "using System.Collections.Generic;\nnamespace Tally.Billing\n{\n    public static class RefundQueue\n    {\n        public static List<string> Pending = new List<string>();\n    }\n\n    public class Refunds\n    {\n        public void Request(string invoiceId) { RefundQueue.Pending.Add(invoiceId); }\n        public void Clear() { RefundQueue.Pending.Clear(); }\n    }\n}\n"
+    },
+    {
+      "write": "Tally.Api/RefundsController.cs",
+      "content": "namespace Tally.Api\n{\n    public class RefundsController\n    {\n        public int Waiting() => Tally.Billing.RefundQueue.Pending.Count;\n        public bool Queued(string id) => Tally.Billing.RefundQueue.Pending.Contains(id);\n    }\n}\n"
+    },
+    {
+      "label": "check --staged passes",
+      "run": [
+        "check",
+        "--staged"
+      ],
+      "exit": 0,
+      "lacks": [
+        "RefundQueue"
+      ]
+    }
+  ]
+}

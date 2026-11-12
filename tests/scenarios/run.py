@@ -377,7 +377,12 @@ def run_gate(ctx, scenario_dir, spec, res, name):
                     p = ctx.run(["reopen", ids[step["reopenId"]], root], cwd=root)
                     res.add("gate", name, label, p.returncode == 0, p.stdout + p.stderr)
                 elif "run" in step:
-                    p = ctx.run(step["run"] + [root] + (["--no-git"] if step.get("noGit", True) else []), cwd=root)
+                    target = root
+                    if step.get("viaSymlink"):
+                        target = os.path.join(tmp, "link-to-root")
+                        if not os.path.islink(target):
+                            os.symlink(root, target)
+                    p = ctx.run(step["run"] + [target] + (["--no-git"] if step.get("noGit", True) else []), cwd=target)
                     out = p.stdout + p.stderr
                     problems = []
                     if "exit" in step and p.returncode != step["exit"]:

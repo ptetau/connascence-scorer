@@ -60,6 +60,52 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
             return Workspace.Analyze(root, config, a.Get("mode"), !a.Has("no-git"));
         }
 
+        /// <summary>A --files entry as a path under the root. A path outside it would never match anything, so it's an error.</summary>
+        static string FileUnderRoot(string root, string file)
+        {
+            var rel = Path.GetRelativePath(root, Path.GetFullPath(file)).Replace('\\', '/');
+            if (rel == ".." || rel.StartsWith("../", StringComparison.Ordinal) || Path.IsPathRooted(rel))
+                throw new InvalidOperationException("--files: " + file + " is not under " + root + ".");
+            return rel;
+        }
+
+        /// <summary>
+        /// Analyses what will be committed: the staged files, written out from git's index, not the working tree (which may
+        /// hold unstaged edits). Settings, futures, decisions and the baseline still come from the working tree, so a
+        /// decision just recorded counts before it is staged.
+        /// </summary>
+        static AnalysisResult RunOnStaged(Args a, string root, Git git, out Config config)
+        {
+            var temp = Path.Combine(Path.GetTempPath(), "connascence-staged-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                git.ExportIndex(temp);
+                var stagedRoot = Path.Combine(temp, git.Prefix);
+                Directory.CreateDirectory(stagedRoot);
+                var cfg = Path.Combine(root, ".connascence.json");
+                if (File.Exists(cfg)) File.Copy(cfg, Path.Combine(stagedRoot, ".connascence.json"), true);
+                CopyState(Path.Combine(root, ".connascence"), Path.Combine(stagedRoot, ".connascence"));
+                config = Config.Load(root);
+                return Workspace.Analyze(stagedRoot, config, a.Get("mode"), false);
+            }
+            finally
+            {
+                try { Directory.Delete(temp, true); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        static void CopyState(string from, string to)
+        {
+            if (!Directory.Exists(from)) return;
+            if (Directory.Exists(to)) Directory.Delete(to, true);
+            foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+            {
+                var target = Path.Combine(to, Path.GetRelativePath(from, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                File.Copy(file, target, true);
+            }
+        }
+
         static void Output(Args a, string text)
         {
             var outPath = a.Get("out");
@@ -92,21 +138,22 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
         static int Check(Args a)
         {
             var root = RootOf(a.Positional(0));
-            Config config;
-            var r = Run(a, root, out config);
-            var maxCost = a.Double("max-cost", config.Thresholds.MaxFindingCost);
-            var minScore = a.Int("min-score", config.Thresholds.MinScore);
-            bool onlyNew = (config.Thresholds.FailOn ?? "new") == "new";
-
             List<string> changed = null;
+            Git git = null;
             if (a.Has("staged") || a.Get("since") != null)
             {
-                var git = Git.Open(root);
+                git = Git.Open(root);
                 if (git == null) throw new InvalidOperationException("--staged and --since need a git repository.");
                 changed = a.Has("staged") ? git.StagedFiles() : git.ChangedSince(a.Get("since"));
             }
             else if (a.Get("files") != null)
-                changed = a.Get("files").Split(',').Select(f => Path.GetRelativePath(root, Path.GetFullPath(f.Trim())).Replace('\\', '/')).ToList();
+                changed = a.Get("files").Split(',').Select(f => FileUnderRoot(root, f.Trim())).ToList();
+
+            Config config;
+            var r = a.Has("staged") ? RunOnStaged(a, root, git, out config) : Run(a, root, out config);
+            var maxCost = a.Double("max-cost", config.Thresholds.MaxFindingCost);
+            var minScore = a.Int("min-score", config.Thresholds.MinScore);
+            bool onlyNew = (config.Thresholds.FailOn ?? "new") == "new";
 
             var relevant = r.Findings.Where(f => !f.Accepted && !(onlyNew && f.InBaseline));
             if (changed != null)
@@ -254,9 +301,11 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
                 Date = DateTime.UtcNow,
                 Score = r.Summary.Score,
                 Fingerprints = r.Findings.Where(f => !f.Accepted).Select(f => f.Fingerprint).Distinct().ToList(),
-                Items = r.Findings.Where(f => !f.Accepted).Select(f => new BaselineItem
+                // Every finding's size, accepted ones included, so growth can be measured (an inline accept lapses when its finding grows).
+                Items = r.Findings.Select(f => new BaselineItem
                 {
                     Fingerprint = f.Fingerprint, RuleId = f.RuleId, GroupKey = f.GroupKey, Degree = f.Degree, Cost = f.Cost,
+                    Accepted = f.Accepted,
                 }).ToList(),
             });
             Console.WriteLine("Baseline saved with " + r.Findings.Count(f => !f.Accepted) + " findings (score " + r.Summary.Score + "). 'check' will now only fail on new ones.");

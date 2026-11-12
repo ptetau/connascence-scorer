@@ -1,0 +1,24 @@
+{
+  "description": "--files names files to check. A path outside the analysed folder can never match, so it is an error rather than a silent pass.",
+  "fixture": "tally",
+  "steps": [
+    {
+      "baseline": true
+    },
+    {
+      "commit": "baseline"
+    },
+    {
+      "label": "a path outside the root exits 2",
+      "run": [
+        "check",
+        "--files",
+        "/definitely/not/here.cs"
+      ],
+      "exit": 2,
+      "contains": [
+        "is not under"
+      ]
+    }
+  ]
+}
