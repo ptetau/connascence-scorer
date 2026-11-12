@@ -232,35 +232,4 @@ namespace Connascence.Cli
             return false;
         }
     }
-
-    public static class Glob
-    {
-        /// <summary>Supports **, * and ? on forward-slash paths.</summary>
-        public static Regex ToRegex(string glob)
-        {
-            var g = glob.Replace('\\', '/').Trim();
-            if (g.StartsWith("./")) g = g.Substring(2);
-            var sb = new System.Text.StringBuilder("^");
-            for (int i = 0; i < g.Length; i++)
-            {
-                var c = g[i];
-                if (c == '*')
-                {
-                    if (i + 1 < g.Length && g[i + 1] == '*')
-                    {
-                        i++;
-                        if (i + 1 < g.Length && g[i + 1] == '/') { i++; sb.Append("(?:.*/)?"); }
-                        else sb.Append(".*");
-                    }
-                    else sb.Append("[^/]*");
-                }
-                else if (c == '?') sb.Append("[^/]");
-                else sb.Append(Regex.Escape(c.ToString()));
-            }
-            // A glob without wildcards that names a folder matches everything under it.
-            if (!g.Contains("*") && !g.Contains("?") && !Path.HasExtension(g)) sb.Append("(?:/.*)?");
-            sb.Append("$");
-            return new Regex(sb.ToString(), RegexOptions.IgnoreCase);
-        }
-    }
 }

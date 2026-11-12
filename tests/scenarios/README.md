@@ -9,13 +9,14 @@ python3 tests/scenarios/run.py            # add -v to see passing checks too
 python3 tests/scenarios/run.py --suite changes --filter status
 ```
 
-## The three suites
+## The four suites
 
 | Suite | Question it answers |
 |---|---|
 | `detection/` | Does each detector find the coupling it should, and stay quiet on look-alikes that are fine? |
 | `changes/` | When a realistic change lands, had the tool already linked the places that had to change together? |
 | `gate/` | Does `connascence check` block and pass the right commits, and do decisions behave as documented? |
+| `analyzer/` | Does the Roslyn analyzer report findings as build warnings, honour its settings, and skip the same files as the CLI? |
 
 Most scenarios run against `tests/fixtures/tally`, a small invoicing app (C#, Python, JS) with coupling
 planted on purpose. `detection/tally-ground-truth` lists every planted coupling and every look-alike.
@@ -51,4 +52,10 @@ Add `why` to say what it's for and `gap` to mark a known weakness.
 **gate**: `steps`, run in order inside a fresh git repo of the fixture:
 `baseline`, `commit`, `write` / `append` / `replace` (edit files), `stage`,
 `run` (CLI args; `exit`, `contains`, `lacks`), `decide` (`accept|refactor` on a `finding` matcher or remembered `id`,
-with `reason`, `future`, `exit`), `remember` (store a finding's id), `reopenId`, `expectFinding` (matcher, `count`).
+with `reason`, `future`, `exit`), `remember` (store a finding's id), `reopenId`, `expectFinding` (matcher, `count`),
+`decisionLogged` (remembered `id` plus fields the logged decision must have).
+
+**analyzer**: builds a copy of the fixture with the analyzer DLL attached (`build`: a project or a list of projects),
+with an optional `.globalconfig` (`globalconfig`) and `edits`. `expect` and `forbid` match build diagnostics on
+`rule`, `file` (path ends with), `fileContains`, `messageContains` and `severity`. `buildExit` checks the build
+result. A diagnostic's file is only its first place; the message carries the place count.

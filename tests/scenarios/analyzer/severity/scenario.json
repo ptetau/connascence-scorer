@@ -1,0 +1,9 @@
+{
+  "description": "Severity is set per rule with dotnet_diagnostic, as for any analyzer. As an error, a finding fails the build.",
+  "fixture": "tally",
+  "build": ["Tally.Api"],
+  "globalconfig": "dotnet_diagnostic.CNP03.severity = error\ndotnet_diagnostic.CNI01.severity = none\n",
+  "buildExit": 1,
+  "expect": [ { "rule": "CNP03", "severity": "error" } ],
+  "forbid": [ { "rule": "CNI01", "why": "turned off" } ]
+}
