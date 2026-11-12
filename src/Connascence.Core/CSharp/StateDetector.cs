@@ -56,7 +56,7 @@ namespace Connascence.CSharp
         {
             var consts = all.GroupBy(c => c.Type).Select(g => g.First()).ToImmutableArray();
             if (consts.Length < 2) return null;
-            var locs = consts.Select(c => ctx.Locate(c.Declarator.Identifier, "definition")).ToImmutableArray();
+            var locs = consts.Select(c => ctx.Locate(c.Declarator.Identifier, Roles.Definition)).ToImmutableArray();
             var name = consts[0].Declarator.Identifier.Text;
             var values = consts.Select(c => c.Value).Distinct().ToImmutableArray();
             // Different strings under the same name are usually different things (e.g. each repository's TableName).
@@ -123,9 +123,9 @@ namespace Connascence.CSharp
         {
             // A scalar that is never assigned after its declaration is a missing readonly, not state anyone shares.
             if (!collection && !uses.Any(IsWrite)) return null;
-            var useLocs = uses.Select(n => ctx.Locate(n, "use")).GroupBy(l => l.Anchor).Select(g => g.First()).ToImmutableArray();
+            var useLocs = uses.Select(n => ctx.Locate(n, Roles.Use)).GroupBy(l => l.Anchor).Select(g => g.First()).ToImmutableArray();
             if (useLocs.Length < 2) return null;
-            var locs = useLocs.Prepend(ctx.Locate(declaration, "declaration")).ToImmutableArray();
+            var locs = useLocs.Prepend(ctx.Locate(declaration, Roles.Declaration)).ToImmutableArray();
             var types = useLocs.Select(l => l.Type).Distinct().Count();
             var owner = symbol.ContainingType?.Name ?? "";
             return new Finding

@@ -156,9 +156,9 @@ namespace Connascence.CSharp
             if (o.Start == 0 && o.Length == o.Body.Statements.Length)
             {
                 var start = parent is BaseMethodDeclarationSyntax || parent is LocalFunctionStatementSyntax ? parent.GetFirstToken() : o.Body.Block.GetFirstToken();
-                return ctx.Locate(start, "copy") with { EndLine = o.Body.Block.GetLocation().GetLineSpan().EndLinePosition.Line + 1 };
+                return ctx.Locate(start, Roles.Copy) with { EndLine = o.Body.Block.GetLocation().GetLineSpan().EndLinePosition.Line + 1 };
             }
-            return ctx.Locate(o.Body.Statements[o.Start], "copy") with
+            return ctx.Locate(o.Body.Statements[o.Start], Roles.Copy) with
             {
                 EndLine = o.Body.Statements[o.Start + o.Length - 1].GetLocation().GetLineSpan().EndLinePosition.Line + 1,
             };
@@ -261,7 +261,7 @@ namespace Connascence.CSharp
 
         static Finding? SharedFormat(CSharpContext ctx, string key, ImmutableArray<LiteralExpressionSyntax> lits)
         {
-            var locs = lits.Select(l => ctx.Locate(l, "use")).ToImmutableArray();
+            var locs = lits.Select(l => ctx.Locate(l, Roles.Use)).ToImmutableArray();
             if (locs.Select(l => l.Anchor).Distinct().Count() < 2) return null;
             var isPattern = key.StartsWith("pattern|", StringComparison.Ordinal);
             var what = (isPattern ? "regex pattern " : "format ") + "\"" + Text.Quote(lits[0].Token.ValueText) + "\"";
@@ -294,7 +294,7 @@ namespace Connascence.CSharp
 
         static Finding? Crypto(CSharpContext ctx, string algorithm, ImmutableArray<IdentifierNameSyntax> uses)
         {
-            var locs = uses.Select(n => ctx.Locate(n, "use")).GroupBy(l => l.Anchor).Select(g => g.First()).ToImmutableArray();
+            var locs = uses.Select(n => ctx.Locate(n, Roles.Use)).GroupBy(l => l.Anchor).Select(g => g.First()).ToImmutableArray();
             if (locs.Select(l => l.Type).Distinct().Count() < 2) return null;
             return new Finding
             {

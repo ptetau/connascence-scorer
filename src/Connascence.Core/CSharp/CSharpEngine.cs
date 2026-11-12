@@ -43,7 +43,7 @@ namespace Connascence.CSharp
 
         /// <summary>Declarations first, then by file and line.</summary>
         static ImmutableArray<CodeLocation> Ordered(IReadOnlyList<CodeLocation> locations) =>
-            locations.OrderBy(l => l.Role == "declaration" || l.Role == "definition" || l.Role == "setup method" ? 0 : 1)
+            locations.OrderBy(l => l.Role == Roles.Declaration || l.Role == Roles.Definition || l.Role == Roles.SetupMethod ? 0 : 1)
                 .ThenBy(l => l.File, StringComparer.Ordinal).ThenBy(l => l.Line).ToImmutableArray();
 
         /// <summary>The finding, accepted if a "connascence: accept" comment marks one of its places.</summary>

@@ -16,6 +16,8 @@ namespace Connascence.Analyzers
     ///
     /// Settings (.editorconfig or .globalconfig):
     ///   connascence.min_cost = 10          only report findings costing at least this much
+    ///   connascence.include_tests = true   also analyse tests, mocks, fakes and stubs (skipped by default, as in the CLI)
+    /// Generated code and migrations are always skipped, using the same rules as the CLI (Paths).
     ///   dotnet_diagnostic.CNM01.severity = none | suggestion | warning | error
     /// Accept a finding inline with a comment on (or just above) a flagged line:
     ///   // connascence: accept - format fixed by the bank's spec, won't change
@@ -71,7 +73,14 @@ namespace Connascence.Analyzers
             if (options.TryGetValue("connascence.min_cost", out raw))
                 double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out minCost);
 
-            var trees = compilation.SyntaxTrees.Where(t => !IsGenerated(t.FilePath)).ToList();
+            bool includeTests = options.TryGetValue("connascence.include_tests", out raw) && raw.Trim().ToLowerInvariant() == "true";
+            string projectDir;
+            options.TryGetValue("build_property.ProjectDir", out projectDir);
+            var trees = compilation.SyntaxTrees.Where(t =>
+            {
+                var rel = RelativeToProjectParent(t.FilePath, projectDir);
+                return !Paths.IsExcludedByDefault(rel) && (includeTests || !Paths.IsTest(rel));
+            }).ToList();
             var files = trees.Select(t => new SourceFile { Tree = t, RelativePath = t.FilePath, Project = compilation.AssemblyName ?? "" }).ToList();
             var ctx = new CSharpContext(compilation, files, new Settings());
             var byPath = trees.GroupBy(t => t.FilePath).ToDictionary(g => g.Key, g => g.First());
@@ -92,11 +101,17 @@ namespace Connascence.Analyzers
             }
         }
 
-        static bool IsGenerated(string path)
+        /// <summary>
+        /// The file's path from the folder above the project ("Tally.Api/Migrations/Initial.cs"), so the shared path rules
+        /// see the project's own name (MyApp.Tests) but not whatever folders the repository happens to sit in.
+        /// </summary>
+        static string RelativeToProjectParent(string path, string projectDir)
         {
-            if (string.IsNullOrEmpty(path)) return false;
-            var p = path.Replace('\\', '/');
-            return p.Contains("/obj/") || p.EndsWith(".g.cs") || p.EndsWith(".generated.cs") || p.EndsWith(".Designer.cs");
+            var p = (path ?? "").Replace('\\', '/');
+            var dir = (projectDir ?? "").Replace('\\', '/').TrimEnd('/');
+            if (dir.Length == 0) return System.IO.Path.GetFileName(p);
+            var parent = dir.Contains("/") ? dir.Substring(0, dir.LastIndexOf('/') + 1) : "";
+            return parent.Length > 0 && p.StartsWith(parent, System.StringComparison.OrdinalIgnoreCase) ? p.Substring(parent.Length) : System.IO.Path.GetFileName(p);
         }
 
         static Location ToLocation(Dictionary<string, SyntaxTree> byPath, CodeLocation l)

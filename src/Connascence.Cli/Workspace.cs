@@ -41,16 +41,6 @@ namespace Connascence.Cli
             "build.gradle", "build.gradle.kts", "Gemfile", "composer.json", "Package.swift", "mix.exs",
         };
 
-        // Test folders and file-name conventions, in any case: tests/, Foo.Tests/, foo.test.js, test_foo.py, foo_test.go.
-        static readonly Regex TestPath = new Regex(
-            @"(^|/)(tests?|specs?|__tests__|testing)(/|$)|[.](Tests?|Specs?|IntegrationTests|UnitTests)(/|$)|[._-](test|spec)\.[a-z]+$|(^|/)test_[^/]*\.py$|_test\.(go|py|rb)$|(^|/)(mocks?|fakes?|stubs?)(/|$)",
-            RegexOptions.IgnoreCase);
-
-        // Test and fake classes by name, as whole words: OrderTests.cs, BasketMockService.cs, fake_clock.py.
-        // Not Latest.cs, Contest.cs, Stubborn.cs or Hammock.cs.
-        static readonly Regex TestName = new Regex(
-            @"(^|/|[a-z0-9_])(Tests?|Specs?)\.cs$|(^|/)([A-Za-z0-9]*[a-z0-9])?(Mock|Fake|Stub)s?([A-Z0-9_][A-Za-z0-9_]*)?\.[a-z]+$|(^|/|[_-])(mock|fake|stub)s?([_-][a-z0-9_-]*)?\.[a-z]+$");
-
         public static AnalysisResult Analyze(string root, Config config, string modeOverride, bool useGit)
         {
             root = Path.GetFullPath(root);
@@ -69,7 +59,7 @@ namespace Connascence.Cli
             {
                 var rel = Path.GetRelativePath(root, path).Replace('\\', '/');
                 if (excludes.Any(r => r.IsMatch(rel))) continue;
-                if (!config.IncludeTests && (TestPath.IsMatch(rel) || TestName.IsMatch(rel))) continue;
+                if (!config.IncludeTests && Paths.IsTest(rel)) continue;
                 var ext = Path.GetExtension(path);
                 bool isCs = ext.Equals(".cs", StringComparison.OrdinalIgnoreCase);
                 if (!GenericEngine.SourceExtensions.Contains(ext)) continue;

@@ -29,6 +29,24 @@ namespace Connascence
         CrossProject = 4,
     }
 
+    /// <summary>
+    /// What a place does in a coupling (CodeLocation.Role). The strings appear in every report and in the JSON,
+    /// so they stay as they are; this is the one place they are written.
+    /// </summary>
+    public static class Roles
+    {
+        public const string Declaration = "declaration";
+        public const string Use = "use";
+        public const string CallSite = "call site";
+        public const string Caller = "caller";
+        public const string Copy = "copy";
+        public const string Definition = "definition";
+        public const string RuntimeGuard = "runtime guard";
+        public const string SetupMethod = "setup method";
+        public const string Wait = "wait";
+        public const string WritesGlobal = "writes global";
+    }
+
     /// <summary>One place in the code that takes part in a coupling.</summary>
     public sealed record CodeLocation
     {

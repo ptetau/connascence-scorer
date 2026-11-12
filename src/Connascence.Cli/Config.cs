@@ -14,12 +14,7 @@ namespace Connascence.Cli
 
         public bool IncludeTests { get; set; } = false;
 
-        public List<string> Exclude { get; set; } = new List<string>
-        {
-            "**/bin/**", "**/obj/**", "**/*.g.cs", "**/*.generated.cs", "**/*.Designer.cs", "**/node_modules/**", "**/*.min.js",
-            // Migrations are append-only history: copies between them never change together.
-            "**/Migrations/**", "**/migrations/**", "**/db/migrate/**", "**/DbScripts*/**", "**/????-??-??_*.sql", "**/V*__*.sql",
-        };
+        public List<string> Exclude { get; set; } = new List<string>(Paths.DefaultExcludes);
 
         public Thresholds Thresholds { get; set; } = new Thresholds();
         public VolatilityConfig Volatility { get; set; } = new VolatilityConfig();

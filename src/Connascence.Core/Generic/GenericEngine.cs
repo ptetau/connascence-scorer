@@ -173,7 +173,7 @@ namespace Connascence.Generic
             bool relational = !(op == "==" || op == "!=" || op == "===" || op == "!==" || op == "=");
             if (isString && relational) return null; // "<" between strings is usually generics or markup, not a comparison
             var tag = !isString && relational ? "limit" : (isString ? "str" : "num");
-            return new Use(tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant(), subject, Loc(f, cl.Key, "use"));
+            return new Use(tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant(), subject, Loc(f, cl.Key, Roles.Use));
         }
 
         static bool IsCodeLike(string subject, ImmutableHashSet<string> codeLike)
@@ -226,14 +226,14 @@ namespace Connascence.Generic
                     .SelectMany(cl => Call.Matches(cl.Value).Cast<Match>()
                         .Where(m => !Keywords.Contains(m.Groups["fn"].Value) && defs.ByName.ContainsKey(m.Groups["fn"].Value))
                         .Where(m => m.Groups["args"].Value.Split(',').Any(a => Bool.IsMatch(a) && !a.Contains("=") && !a.Contains(":")))
-                        .Select(m => (Function: m.Groups["fn"].Value, Location: Loc(f, cl.Key, "call site")))))
+                        .Select(m => (Function: m.Groups["fn"].Value, Location: Loc(f, cl.Key, Roles.CallSite)))))
                 .GroupBy(x => x.Function, x => x.Location)
                 .Select(g => defs.ByName.TryGetValue(g.Key, out var found) && found.Length > 0 ? BooleanFlag(g.Key, found[0], g.ToImmutableArray()) : null)
                 .OfType<Finding>();
 
         static Finding BooleanFlag(string fn, Definition def, ImmutableArray<CodeLocation> calls)
         {
-            var locs = calls.Prepend(Loc(def.File, def.Line, "declaration")).ToImmutableArray();
+            var locs = calls.Prepend(Loc(def.File, def.Line, Roles.Declaration)).ToImmutableArray();
             return new Finding
             {
                 RuleId = "GNM02",
@@ -280,10 +280,10 @@ namespace Connascence.Generic
             var calls = sites
                 .Where(c => !(c.File == def.File && c.Line == def.Line))
                 .Where(c => c.Args.Split(',') is var args && args.Length >= 2 && !args.Skip(1).All(a => a.Contains("=") || a.Contains(":"))) // not all named
-                .Select(c => Loc(c.File, c.Line, "call site"))
+                .Select(c => Loc(c.File, c.Line, Roles.CallSite))
                 .ToImmutableArray();
             if (calls.IsEmpty) return null;
-            var locs = calls.Prepend(Loc(def.File, def.Line, "declaration")).ToImmutableArray();
+            var locs = calls.Prepend(Loc(def.File, def.Line, Roles.Declaration)).ToImmutableArray();
             return new Finding
             {
                 RuleId = "GNP01",
@@ -357,7 +357,7 @@ namespace Connascence.Generic
 
         static Finding CopiedBlock(string key, ImmutableList<At> distinct, int len)
         {
-            var locs = distinct.Select(o => Loc(o.Source.File, o.Source.Lines[o.Index].Key, "copy") with { EndLine = o.Source.Lines[o.Index + len - 1].Key + 1 })
+            var locs = distinct.Select(o => Loc(o.Source.File, o.Source.Lines[o.Index].Key, Roles.Copy) with { EndLine = o.Source.Lines[o.Index + len - 1].Key + 1 })
                 .ToImmutableArray();
             return new Finding
             {
@@ -393,7 +393,7 @@ namespace Connascence.Generic
 
         static Finding FixedWait(TextFile f, KeyValuePair<int, string> cl, string title)
         {
-            var loc = Loc(f, cl.Key, "wait");
+            var loc = Loc(f, cl.Key, Roles.Wait);
             return new Finding
             {
                 RuleId = "GNT01",
@@ -425,7 +425,7 @@ namespace Connascence.Generic
                 ? pg.Groups["names"].Value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).Select(n => f.Project + "|" + n)
                 : Enumerable.Empty<string>();
             var ruby = RubyGlobal.Matches(cl.Value).Cast<Match>().Select(rg => f.Project + "|$" + rg.Groups["name"].Value);
-            return python.Concat(ruby).Select(key => (key, Loc(f, cl.Key, "writes global")));
+            return python.Concat(ruby).Select(key => (key, Loc(f, cl.Key, Roles.WritesGlobal)));
         }
 
         static Finding Global(string key, ImmutableArray<CodeLocation> locs)

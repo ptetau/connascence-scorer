@@ -39,7 +39,7 @@ namespace Connascence.CSharp
             if (positional.IsEmpty) return null;
 
             var name = decl is ConstructorDeclarationSyntax cd ? "new " + cd.Identifier.Text : symbol.Name;
-            var locs = positional.Select(c => ctx.Locate(c.Node, "call site")).Prepend(ctx.Locate(decl.ParameterList!, "declaration")).ToImmutableArray();
+            var locs = positional.Select(c => ctx.Locate(c.Node, Roles.CallSite)).Prepend(ctx.Locate(decl.ParameterList!, Roles.Declaration)).ToImmutableArray();
             var typeName = sameType.Key;
             var sameNames = string.Join(", ", sameType.Select(p => p.Identifier.Text).ToArray());
 
@@ -84,7 +84,7 @@ namespace Connascence.CSharp
             var calls = ctx.CallsTo(symbol);
             if (calls.Count == 0) return null;
 
-            var locs = calls.Select(c => ctx.Locate(c.Node, "call site")).Prepend(ctx.Locate(decl.ReturnType, "declaration")).ToImmutableArray();
+            var locs = calls.Select(c => ctx.Locate(c.Node, Roles.CallSite)).Prepend(ctx.Locate(decl.ReturnType, Roles.Declaration)).ToImmutableArray();
             return new Finding
             {
                 RuleId = "CNP02",
@@ -119,7 +119,7 @@ namespace Connascence.CSharp
         static Finding Indexes(CSharpContext ctx, string key, ImmutableArray<ElementAccessExpressionSyntax> uses)
         {
             var indices = uses.Select(u => u.ArgumentList.Arguments[0].ToString()).Distinct().ToImmutableArray();
-            var locs = uses.Select(u => ctx.Locate(u, "use")).ToImmutableArray();
+            var locs = uses.Select(u => ctx.Locate(u, Roles.Use)).ToImmutableArray();
             var expr = Text.Quote(uses[0].Expression.ToString());
             return new Finding
             {

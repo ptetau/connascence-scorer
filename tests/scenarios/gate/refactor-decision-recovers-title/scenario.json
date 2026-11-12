@@ -1,0 +1,15 @@
+{
+  "description": "After a refactor the finding is gone, so its decision is logged with the id from before. The title and rule are recovered for any finding in the baseline, not only the costly ones the run log tracks. Found while dogfooding: four cheap findings were logged with no title.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "remember": "role", "finding": { "rule": "CNM01", "groupKey": "str|accountant|role" } },
+    { "replace": "Tally.Api/CustomersController.cs", "old": "if (role == \"accountant\")", "new": "if (role == Roles.Accountant)" },
+    { "replace": "Tally.Api/InvoicesController.cs", "old": "role != \"accountant\"", "new": "role != Roles.Accountant" },
+    { "write": "Tally.Api/Roles.cs", "content": "namespace Tally.Api\n{\n    public static class Roles\n    {\n        public const string Accountant = \"accountant\";\n    }\n}\n" },
+    { "label": "the finding is gone", "expectFinding": { "rule": "CNM01", "groupKey": "str|accountant|role" }, "count": 0 },
+    { "label": "refactor logged", "decide": "refactor", "id": "role", "reason": "Accountant logins (F4) add permissions; one constant now" },
+    { "label": "the decision names the finding", "decisionLogged": { "id": "role", "ruleId": "CNM01", "title": "Magic value \"accountant\"" } }
+  ]
+}

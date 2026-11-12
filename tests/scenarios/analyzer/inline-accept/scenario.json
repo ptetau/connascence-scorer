@@ -1,0 +1,8 @@
+{
+  "description": "An inline accept comment silences the build warning, as it accepts the finding in the CLI.",
+  "fixture": "tally",
+  "build": ["Tally.Api"],
+  "edits": [ { "file": "Tally.Billing/BankFile.cs", "old": "                Date = DateTime.ParseExact(parts[0]", "new": "                // connascence: accept - column order fixed by the bank's statement spec\n                Date = DateTime.ParseExact(parts[0]" } ],
+  "expect": [ { "rule": "CNI01", "why": "other findings still report" } ],
+  "forbid": [ { "rule": "CNP03" } ]
+}

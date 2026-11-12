@@ -104,9 +104,13 @@ var amount = parts[3];
 
 ```ini
 # .editorconfig or .globalconfig
-connascence.min_cost = 10
-dotnet_diagnostic.CNM01.severity = suggestion
+connascence.min_cost = 10                       # only report findings costing at least this much (default 10)
+connascence.include_tests = true                # also analyse tests, mocks, fakes and stubs (skipped by default)
+dotnet_diagnostic.CNM01.severity = suggestion   # per rule: none, suggestion, warning or error
 ```
+
+It skips the same files as the CLI: generated code, migrations, and (unless `include_tests` is set) tests and mocks.
+Reference the DLL with `<Analyzer Include="path/to/Connascence.Analyzers.dll" />`, or the package once it is published.
 
 ## Files it keeps
 

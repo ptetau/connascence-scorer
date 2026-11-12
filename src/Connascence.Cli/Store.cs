@@ -33,6 +33,7 @@ namespace Connascence.Cli
     {
         public string Fingerprint { get; set; }
         public string RuleId { get; set; }
+        public string Title { get; set; }
         public string GroupKey { get; set; }
         public int Degree { get; set; }
         public double Cost { get; set; }
@@ -242,37 +243,6 @@ namespace Connascence.Cli
                 if (j == kw.Count) return true;
             }
             return false;
-        }
-    }
-
-    public static class Glob
-    {
-        /// <summary>Supports **, * and ? on forward-slash paths.</summary>
-        public static Regex ToRegex(string glob)
-        {
-            var g = glob.Replace('\\', '/').Trim();
-            if (g.StartsWith("./")) g = g.Substring(2);
-            var sb = new System.Text.StringBuilder("^");
-            for (int i = 0; i < g.Length; i++)
-            {
-                var c = g[i];
-                if (c == '*')
-                {
-                    if (i + 1 < g.Length && g[i + 1] == '*')
-                    {
-                        i++;
-                        if (i + 1 < g.Length && g[i + 1] == '/') { i++; sb.Append("(?:.*/)?"); }
-                        else sb.Append(".*");
-                    }
-                    else sb.Append("[^/]*");
-                }
-                else if (c == '?') sb.Append("[^/]");
-                else sb.Append(Regex.Escape(c.ToString()));
-            }
-            // A glob without wildcards matches that path and everything under it, so a folder named like "Tally.Billing" works.
-            if (!g.Contains("*") && !g.Contains("?")) sb.Append("(?:/.*)?");
-            sb.Append("$");
-            return new Regex(sb.ToString(), RegexOptions.IgnoreCase);
         }
     }
 }

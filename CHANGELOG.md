@@ -18,6 +18,14 @@
   about. Before, a partial map dropped the other defaults to 1.
 - Core API: findings are immutable records, `Scoring.Score` returns the scored finding, and `CSharpEngine.Analyze`
   returns detector warnings with the findings instead of adding them to the context.
+- `calibrate` reports, per finding, how often two of its files changed in the same commit, overall, by kind and
+  either side of the gate. The old per-pair figures made large findings look worse than they are.
+- Refactor decisions recover a finding's rule, title and cost from the baseline when the run log doesn't have
+  it (the run log only tracks findings costing 10 or more). Baselines now store titles.
+- Location roles are constants in `Roles`; the strings in reports are unchanged.
+- The Roslyn analyzer skips the same files as the CLI (generated code, migrations, tests and mocks), using rules
+  shared in `Paths`. It used to count migrations, so its warnings disagreed with the report. New setting:
+  `connascence.include_tests`. The analyzer now has scenario tests (`tests/scenarios/analyzer`).
 
 ## 0.2.0 (2026-11-12)
 

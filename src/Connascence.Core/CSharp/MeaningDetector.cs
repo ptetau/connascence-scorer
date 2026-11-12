@@ -78,7 +78,7 @@ namespace Connascence.CSharp
             if (hits.Length < 2 && !(codeSubject && !isLimit)) return null;
             if (hits.Length < 2 && first.Literal.IsKind(SyntaxKind.NumericLiteralExpression) && ignored.Contains(NumberText(first.Literal))) return null;
 
-            var locs = hits.Select(h => ctx.Locate(h.Literal, "use")).ToImmutableArray();
+            var locs = hits.Select(h => ctx.Locate(h.Literal, Roles.Use)).ToImmutableArray();
             var value = isString ? "\"" + Text.Quote(first.Literal.Token.ValueText) + "\"" : NumberText(first.Literal);
             var subject = first.Subject;
 
@@ -303,9 +303,9 @@ namespace Connascence.CSharp
             var decl = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
             var declaration = decl != null && ctx.FileOf(decl.SyntaxTree) != null
                 ? ImmutableArray.Create(ctx.Locate(decl is MethodDeclarationSyntax md ? md.Identifier
-                                                   : decl is ConstructorDeclarationSyntax cd ? cd.Identifier : decl.GetFirstToken(), "declaration"))
+                                                   : decl is ConstructorDeclarationSyntax cd ? cd.Identifier : decl.GetFirstToken(), Roles.Declaration))
                 : ImmutableArray<CodeLocation>.Empty;
-            var locs = declaration.Concat(flagged.Select(c => ctx.Locate(c.Node, "call site"))).ToImmutableArray();
+            var locs = declaration.Concat(flagged.Select(c => ctx.Locate(c.Node, Roles.CallSite))).ToImmutableArray();
 
             var name = method.MethodKind == MethodKind.Constructor ? "new " + method.ContainingType.Name : method.Name;
             var param = flagParams.Length > 0 ? string.Join(", ", flagParams) : "a bool parameter";

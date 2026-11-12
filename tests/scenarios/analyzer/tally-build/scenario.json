@@ -1,0 +1,12 @@
+{
+  "description": "Building Tally with the analyzer attached reports the costly findings inside each project as build warnings. The analyzer sees one project at a time, so coupling across projects (status 3 in Api and Billing) is the CLI's job.",
+  "fixture": "tally",
+  "build": ["Tally.Api"],
+  "buildExit": 0,
+  "expect": [
+    { "rule": "CNI01", "file": "Tally.Billing/InvoiceCache.cs", "messageContains": "InvoiceCache.Items" },
+    { "rule": "CNP03", "file": "Tally.Billing/BankFile.cs", "messageContains": "parts" },
+    { "rule": "CNA02", "file": "Tally.Billing/BankFile.cs", "messageContains": "dd/MM/yyyy" },
+    { "messageContains": "(cost ", "why": "every message carries its cost and id" }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "description": "connascence.min_cost hides findings that cost less.",
+  "fixture": "tally",
+  "build": ["Tally.Api"],
+  "globalconfig": "connascence.min_cost = 1000\n",
+  "forbid": [ { "fileContains": "Tally", "why": "nothing in Tally costs 1000" } ]
+}

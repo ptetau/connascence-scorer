@@ -66,9 +66,9 @@ namespace Connascence.CSharp
 
             var className = cls.Identifier.Text;
             var otherNames = evidence.OtherNames;
-            var locs = evidence.Guards.Take(5).Select(g => ctx.Locate(g, "runtime guard"))
-                .Concat(external.Select(c => ctx.Locate(c.Node, "caller")))
-                .Prepend(ctx.Locate(init.Identifier, "setup method"))
+            var locs = evidence.Guards.Take(5).Select(g => ctx.Locate(g, Roles.RuntimeGuard))
+                .Concat(external.Select(c => ctx.Locate(c.Node, Roles.Caller)))
+                .Prepend(ctx.Locate(init.Identifier, Roles.SetupMethod))
                 .ToImmutableArray();
             return new Finding
             {
@@ -112,7 +112,7 @@ namespace Connascence.CSharp
             var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.ToString() ?? "";
             if (arg == "0" || arg.Contains("Infinite")) return null;
 
-            var loc = ctx.Locate(inv, "wait");
+            var loc = ctx.Locate(inv, Roles.Wait);
             var inLoop = inv.Ancestors().Any(a => a is WhileStatementSyntax || a is ForStatementSyntax || a is DoStatementSyntax || a is ForEachStatementSyntax);
             return new Finding
             {
