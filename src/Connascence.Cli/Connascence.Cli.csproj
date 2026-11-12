@@ -4,7 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>Connascence.Cli</RootNamespace>
     <AssemblyName>connascence</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>connascence</ToolCommandName>
     <PackageId>Connascence.Tool</PackageId>

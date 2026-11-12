@@ -22,8 +22,17 @@ All weights are in `.connascence.json`. Nobody has validated them, so `connascen
 
 ## Quick start
 
+The tool isn't on NuGet yet. Build it and install it from the local package (needs the .NET 8 SDK):
+
 ```sh
-dotnet tool install -g Connascence.Tool          # or build from source, below
+git clone https://github.com/ptetau/connascence-scorer && cd connascence-scorer
+dotnet pack src/Connascence.Cli -o ./nupkg
+dotnet tool install -g Connascence.Tool --add-source ./nupkg
+```
+
+Then, in the repo you want to check:
+
+```sh
 cd your-repo
 connascence init --hook                          # config, futures template, pre-commit hook
 connascence analyze                              # see where you stand
@@ -72,7 +81,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | CNV02 | Value | The same limit checked in several places (`Length > 50`) |
 | CNI01 | Identity | Mutable static state used from several members |
 
-Tests, and mocks, fakes and stubs (`BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations are excluded.
+Tests, and mocks, fakes and stubs (`BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations (EF `Migrations/`, `migrations/`, Rails `db/migrate`, `DbScripts`, dated `2021-04-07_x.sql` and Flyway `V3__x.sql` scripts) are excluded.
 
 ## Generic mode
 

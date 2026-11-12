@@ -8,7 +8,8 @@ Paste this into the repo's agent instructions.
 This repo runs `connascence check --staged` as a pre-commit hook. It fails when a change adds or grows
 coupling that makes code expensive to change.
 
-When it fails, follow the connascence-review skill:
+When it fails, load the connascence-review skill (with your skill tool, before deciding anything) and follow it. The
+short version below is a reminder, not a substitute:
 - Read each finding's cause, suggested fix, change probe and the futures that touch it (.connascence/futures.json).
 - If a likely change would force edits in several of the listed places, refactor. Keep the fix small and readable.
 - If not, accept it: `connascence decide <id> accept --reason "<change considered> and why it isn't hurt"`.

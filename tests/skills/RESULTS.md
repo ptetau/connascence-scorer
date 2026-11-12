@@ -82,3 +82,17 @@ Still open:
 - In the same case, it tagged the shared-cache decision with the GST future in 2 of 3 runs. The tool
   suggests that future because the case's futures file uses the whole of `InvoiceService.cs` as its area, and
   the agent copies the tool's suggestion.
+
+## 2026-11-12: CLAUDE.md snippet tells agents to load the review skill
+
+The snippet in `docs/AGENTS-snippet.md` now says to load the connascence-review skill before deciding,
+and that its short version is a reminder, not a substitute.
+
+6 sessions, $2.75.
+
+| Case | Runs | Skill loaded | Checks | Rubric |
+|---|---|---|---|---|
+| review-pressure-to-accept | 3 | 3/3 (was 0/3) | 3/3 | 12/12 (was 10/12) |
+| review-accept-stable-bank-format | 3 | 3/3 (was 2/3) | 3/3 | 12/12 |
+
+With the skill loaded, the pressure case's vague reasons and wrong future tags went away.

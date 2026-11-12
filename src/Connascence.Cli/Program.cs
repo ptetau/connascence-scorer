@@ -416,7 +416,7 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
 # Agents: read the report, then refactor or run `connascence decide <id> accept --reason ""...""`.
 # Skip once with: git commit --no-verify
 if ! command -v connascence >/dev/null 2>&1; then
-  echo ""connascence not installed; skipping check (dotnet tool install -g Connascence.Tool)""
+  echo ""connascence not installed; skipping check (see https://github.com/ptetau/connascence-scorer#quick-start)""
   exit 0
 fi
 connascence check --staged --no-git ""$(git rev-parse --show-toplevel)""
