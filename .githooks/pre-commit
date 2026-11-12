@@ -13,9 +13,12 @@ if [ -z "$dotnet" ]; then
   echo "connascence: dotnet not found; skipping the coupling check"
   exit 0
 fi
-if ! "$dotnet" build "$root/src/Connascence.Cli" -c Release -nologo -v q >/dev/null 2>&1; then
-  echo "connascence: the CLI doesn't build at this commit; skipping the coupling check"
-  exit 0
+# A commit that doesn't build can't be checked, and skipping would let it past both gates. Fix the build, or skip
+# once with --no-verify (CI still builds and checks it).
+if ! build_output=$("$dotnet" build "$root/src/Connascence.Cli" -c Release -nologo -v q 2>&1); then
+  echo "$build_output" | grep -E " error " | sort -u | head -20
+  echo "connascence: the CLI doesn't build, so this commit can't be checked. Fix the build (or commit with --no-verify)."
+  exit 1
 fi
 status=0
 "$dotnet" "$root/src/Connascence.Cli/bin/Release/net11.0/connascence.dll" check --staged --no-git "$root" || status=1

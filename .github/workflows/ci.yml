@@ -59,8 +59,21 @@ jobs:
           fi
           echo "path=$path" >> "$GITHUB_OUTPUT"
 
+      # The same for the baseline of known violations: the PR's own copy could raise its allowance.
+      - name: Use the base branch's FunctionalLint baseline
+        id: baseline
+        run: |
+          path="$RUNNER_TEMP/functionallint-baseline.json"
+          if [ -n "${GITHUB_BASE_REF:-}" ] && git show "origin/$GITHUB_BASE_REF:.functionallint-baseline.json" > "$path" 2>/dev/null; then
+            echo "The gate uses $GITHUB_BASE_REF's .functionallint-baseline.json."
+          else
+            cp .functionallint-baseline.json "$path"
+          fi
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+
       - name: Functional core gate (FunctionalLint on Connascence.Core)
         env:
           FUNCTIONALLINT_NO_SERVER: "1"
           FUNCTIONALLINT_POLICY: ${{ steps.policy.outputs.path }}
+          FUNCTIONALLINT_BASELINE: ${{ steps.baseline.outputs.path }}
         run: python3 scripts/functional-gate.py

@@ -23,7 +23,8 @@ from collections import Counter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HEAL = os.path.join(ROOT, "external", "functional-csharp", "FunctionalLint", "heal.sh")
 CORE = os.path.join("src", "Connascence.Core", "Connascence.Core.csproj")
-BASELINE = os.path.join(ROOT, ".functionallint-baseline.json")
+# CI points FUNCTIONALLINT_BASELINE at the base branch's copy, so a pull request can't raise its own allowance.
+BASELINE = os.environ.get("FUNCTIONALLINT_BASELINE") or os.path.join(ROOT, ".functionallint-baseline.json")
 LINE = re.compile(r"^(?:(?P<file>.+?)\(\d+,\d+\): )?(?P<severity>warning|error) (?P<id>[A-Z]+\d+): (?P<message>.*)$")
 
 
