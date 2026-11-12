@@ -1,0 +1,59 @@
+name: Skill evals
+
+# Runs real Claude Code sessions, so it costs API usage (about $17 for every case three times).
+# Manual only. Needs an ANTHROPIC_API_KEY repository secret.
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: "Run cases whose id contains this text (empty for all)"
+        required: false
+        default: ""
+      runs:
+        description: "Runs per case"
+        required: false
+        default: "1"
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the API key is set
+        run: test -n "$ANTHROPIC_API_KEY" || { echo "Add an ANTHROPIC_API_KEY repository secret first."; exit 1; }
+
+      - name: Install Claude Code
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Build
+        run: dotnet build Connascence.sln
+
+      - name: Run skill evals
+        run: python3 tests/skills/run.py --case "${{ inputs.case }}" --runs "${{ inputs.runs }}" --out "$RUNNER_TEMP/skill-evals"
+
+      - name: Summary
+        if: always()
+        run: cat "$RUNNER_TEMP/skill-evals/summary.md" >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Keep transcripts and repos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-evals
+          path: ${{ runner.temp }}/skill-evals
+          retention-days: 14

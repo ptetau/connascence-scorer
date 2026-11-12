@@ -22,8 +22,17 @@ All weights are in `.connascence.json`. Nobody has validated them, so `connascen
 
 ## Quick start
 
+The tool isn't on NuGet yet. Build it and install it from the local package (needs the .NET 8 SDK):
+
 ```sh
-dotnet tool install -g Connascence.Tool          # or build from source, below
+git clone https://github.com/ptetau/connascence-scorer && cd connascence-scorer
+dotnet pack src/Connascence.Cli -o ./nupkg
+dotnet tool install -g Connascence.Tool --add-source ./nupkg
+```
+
+Then, in the repo you want to check:
+
+```sh
 cd your-repo
 connascence init --hook                          # config, futures template, pre-commit hook
 connascence analyze                              # see where you stand

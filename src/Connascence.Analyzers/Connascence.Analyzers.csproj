@@ -17,7 +17,7 @@
     <DevelopmentDependency>true</DevelopmentDependency>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <PackageId>Connascence.Analyzers</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Description>Build-time connascence warnings: magic values, positional parameters, copied logic, call-order rules, fixed waits, duplicated constants and shared mutable state.</Description>
     <NoWarn>$(NoWarn);RS2008;RS1036</NoWarn>
   </PropertyGroup>

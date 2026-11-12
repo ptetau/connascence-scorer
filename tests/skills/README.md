@@ -28,6 +28,8 @@ python3 tests/skills/run.py --runs 3 --case explore   # repeat to see how consis
 python3 tests/skills/run.py --regrade <out folder>    # re-apply checks and judge to saved runs
 ```
 
+On GitHub, run the **Skill evals** workflow by hand (Actions tab). It needs an `ANTHROPIC_API_KEY` repository secret and uploads the transcripts and repos as an artifact.
+
 Options: `--model`, `--judge-model`, `--owner-model` (default `haiku`), `--jobs` (default 3), `--out`, `--no-judge`.
 
 Each run writes `summary.md` and `results.json` to the out folder (default under the system temp folder),

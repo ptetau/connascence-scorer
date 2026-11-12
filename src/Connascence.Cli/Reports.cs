@@ -8,7 +8,7 @@ namespace Connascence.Cli
 {
     public static class Reports
     {
-        public const string Version = "0.1.0";
+        public const string Version = "0.2.0";
 
         public static string Render(string format, AnalysisResult r, IList<Finding> shown, int top, string title = null)
         {
