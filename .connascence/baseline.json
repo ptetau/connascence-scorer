@@ -1,0 +1,368 @@
+{
+  "date": "2026-11-12T09:13:46.5984659Z",
+  "score": 37,
+  "fingerprints": [
+    "afdae2f1ea",
+    "e2400bb2a2",
+    "76fd260c8c",
+    "0a05e9ca09",
+    "9829b7cbf5",
+    "2e895e0a2d",
+    "30ca35cda2",
+    "02b93a9aa5",
+    "082c4a6c49",
+    "59921e67ba",
+    "06d4ffb068",
+    "b342e13d09",
+    "aeb704e749",
+    "99a713c700",
+    "a5ff24a51a",
+    "0a2df53e8d",
+    "504b32f0c3",
+    "5ff085be22",
+    "2ab9301397",
+    "39adb1be8c",
+    "e346ce0b96",
+    "7883cb522f",
+    "045f5a94d1",
+    "1b6e6c0d1f",
+    "16ba110240",
+    "f228cec6f1",
+    "40191aae6c",
+    "11656ec9ae",
+    "6257ee46e6",
+    "e3b0a581e7",
+    "332907faa8",
+    "acecdcf7f2",
+    "afbfa7aa5c",
+    "6f62854809",
+    "0538a84e02",
+    "5e94683727",
+    "1a3dba65b3",
+    "77099a8c29",
+    "b06b342051",
+    "5a113cb779",
+    "8a216fa8dc",
+    "667b95d27a",
+    "f730ca4c59",
+    "93aee06bd0",
+    "701f1e4c69"
+  ],
+  "items": [
+    {
+      "fingerprint": "afdae2f1ea",
+      "ruleId": "CNA02",
+      "groupKey": "format|0.0",
+      "degree": 6,
+      "cost": 30
+    },
+    {
+      "fingerprint": "e2400bb2a2",
+      "ruleId": "CNM01",
+      "groupKey": "str|declaration|role",
+      "degree": 7,
+      "cost": 21
+    },
+    {
+      "fingerprint": "76fd260c8c",
+      "ruleId": "CNM01",
+      "groupKey": "str|use|role",
+      "degree": 6,
+      "cost": 18
+    },
+    {
+      "fingerprint": "0a05e9ca09",
+      "ruleId": "CNV02",
+      "groupKey": "limit|10|count",
+      "degree": 2,
+      "cost": 16
+    },
+    {
+      "fingerprint": "9829b7cbf5",
+      "ruleId": "CNV02",
+      "groupKey": "limit|3|length",
+      "degree": 2,
+      "cost": 16
+    },
+    {
+      "fingerprint": "2e895e0a2d",
+      "ruleId": "CNV02",
+      "groupKey": "limit|40|length",
+      "degree": 2,
+      "cost": 16
+    },
+    {
+      "fingerprint": "30ca35cda2",
+      "ruleId": "CNV02",
+      "groupKey": "limit|160|length",
+      "degree": 2,
+      "cost": 16
+    },
+    {
+      "fingerprint": "02b93a9aa5",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.Text.CountVerb(int, string, string, string)",
+      "degree": 4,
+      "cost": 16
+    },
+    {
+      "fingerprint": "082c4a6c49",
+      "ruleId": "CNM01",
+      "groupKey": "str|call site|role",
+      "degree": 5,
+      "cost": 15
+    },
+    {
+      "fingerprint": "59921e67ba",
+      "ruleId": "CNM01",
+      "groupKey": "str|copy|role",
+      "degree": 3,
+      "cost": 9
+    },
+    {
+      "fingerprint": "06d4ffb068",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.Cli.Workspace.Analyze(string, Connascence.Cli.Config, string, bool)",
+      "degree": 2,
+      "cost": 8
+    },
+    {
+      "fingerprint": "b342e13d09",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.Scoring.Summarise(System.Collections.Generic.IList\u003CConnascence.Finding\u003E, int, int, Connascence.Settings)",
+      "degree": 1,
+      "cost": 8
+    },
+    {
+      "fingerprint": "aeb704e749",
+      "ruleId": "CNP03",
+      "groupKey": "GenericEngine.MagicValues|parts",
+      "degree": 2,
+      "cost": 8
+    },
+    {
+      "fingerprint": "99a713c700",
+      "ruleId": "CNI01",
+      "groupKey": "Connascence.Generic.GenericEngine.Keywords",
+      "degree": 3,
+      "cost": 6.75
+    },
+    {
+      "fingerprint": "a5ff24a51a",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.Cli.Reports.Render(string, Connascence.Cli.AnalysisResult, System.Collections.Generic.IList\u003CConnascence.Finding\u003E, int, string)",
+      "degree": 2,
+      "cost": 8
+    },
+    {
+      "fingerprint": "0a2df53e8d",
+      "ruleId": "CNM01",
+      "groupKey": "str|definition|role",
+      "degree": 2,
+      "cost": 6
+    },
+    {
+      "fingerprint": "504b32f0c3",
+      "ruleId": "CNM01",
+      "groupKey": "str|setup method|role",
+      "degree": 2,
+      "cost": 6
+    },
+    {
+      "fingerprint": "5ff085be22",
+      "ruleId": "CNM01",
+      "groupKey": "str|wait|role",
+      "degree": 2,
+      "cost": 6
+    },
+    {
+      "fingerprint": "2ab9301397",
+      "ruleId": "CNP03",
+      "groupKey": "MeaningDetector.BooleanFlags|param.Split(\u0027,\u0027)",
+      "degree": 1,
+      "cost": 4
+    },
+    {
+      "fingerprint": "39adb1be8c",
+      "ruleId": "CNP03",
+      "groupKey": "GenericEngine.Globals|kv.Key.Split(\u0027|\u0027)",
+      "degree": 1,
+      "cost": 4
+    },
+    {
+      "fingerprint": "e346ce0b96",
+      "ruleId": "CNP03",
+      "groupKey": "Workspace.ProjectOf|rel.Split(\u0027/\u0027)",
+      "degree": 1,
+      "cost": 4
+    },
+    {
+      "fingerprint": "7883cb522f",
+      "ruleId": "CNM02",
+      "groupKey": "Connascence.Cli.Workspace.Analyze(string, Connascence.Cli.Config, string, bool)",
+      "degree": 1,
+      "cost": 3
+    },
+    {
+      "fingerprint": "045f5a94d1",
+      "ruleId": "CNI01",
+      "groupKey": "Connascence.Analyzers.ConnascenceAnalyzer.Rules",
+      "degree": 2,
+      "cost": 4.5
+    },
+    {
+      "fingerprint": "1b6e6c0d1f",
+      "ruleId": "CNM01",
+      "groupKey": "str|args|[]",
+      "degree": 3,
+      "cost": 2.25
+    },
+    {
+      "fingerprint": "16ba110240",
+      "ruleId": "CNM01",
+      "groupKey": "str|name|[]",
+      "degree": 2,
+      "cost": 1.5
+    },
+    {
+      "fingerprint": "f228cec6f1",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.Cli.Program.LogRun(string, Connascence.Cli.Config, Connascence.Cli.AnalysisResult, string, string)",
+      "degree": 2,
+      "cost": 2
+    },
+    {
+      "fingerprint": "40191aae6c",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.Cli.Program.Decide(Connascence.Cli.Args, string, string, string)",
+      "degree": 2,
+      "cost": 2
+    },
+    {
+      "fingerprint": "11656ec9ae",
+      "ruleId": "CNP01",
+      "groupKey": "Connascence.CSharp.AlgorithmDetector.LongestRun(System.Collections.Generic.List\u003Cstring\u003E, System.Collections.Generic.List\u003Cstring\u003E, out int, out int, out int)",
+      "degree": 1,
+      "cost": 1
+    },
+    {
+      "fingerprint": "6257ee46e6",
+      "ruleId": "CNM01",
+      "groupKey": "str|=|op",
+      "degree": 3,
+      "cost": 0.9
+    },
+    {
+      "fingerprint": "e3b0a581e7",
+      "ruleId": "CNM01",
+      "groupKey": "str|pattern|category",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "332907faa8",
+      "ruleId": "CNM01",
+      "groupKey": "str|subject|[]",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "acecdcf7f2",
+      "ruleId": "CNM01",
+      "groupKey": "str|==|op",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "afbfa7aa5c",
+      "ruleId": "CNM01",
+      "groupKey": "str|!=|op",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "6f62854809",
+      "ruleId": "CNM01",
+      "groupKey": "str|===|op",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "0538a84e02",
+      "ruleId": "CNM01",
+      "groupKey": "str|!==|op",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "5e94683727",
+      "ruleId": "CNM01",
+      "groupKey": "str|call|[]",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "1a3dba65b3",
+      "ruleId": "CNM01",
+      "groupKey": "str|writes global|role",
+      "degree": 2,
+      "cost": 0.6
+    },
+    {
+      "fingerprint": "77099a8c29",
+      "ruleId": "CNM01",
+      "groupKey": "str|accept|choice",
+      "degree": 3,
+      "cost": 0.9
+    },
+    {
+      "fingerprint": "b06b342051",
+      "ruleId": "CNM01",
+      "groupKey": "str|format|category",
+      "degree": 1,
+      "cost": 0.3
+    },
+    {
+      "fingerprint": "5a113cb779",
+      "ruleId": "CNM01",
+      "groupKey": "str|runtime guard|role",
+      "degree": 1,
+      "cost": 0.3
+    },
+    {
+      "fingerprint": "8a216fa8dc",
+      "ruleId": "CNM01",
+      "groupKey": "str|caller|role",
+      "degree": 1,
+      "cost": 0.3
+    },
+    {
+      "fingerprint": "667b95d27a",
+      "ruleId": "CNM01",
+      "groupKey": "str|csharp|mode",
+      "degree": 1,
+      "cost": 0.3
+    },
+    {
+      "fingerprint": "f730ca4c59",
+      "ruleId": "CNM01",
+      "groupKey": "str|generic|mode",
+      "degree": 1,
+      "cost": 0.3
+    },
+    {
+      "fingerprint": "93aee06bd0",
+      "ruleId": "CNM01",
+      "groupKey": "str|high|volatilitylevel",
+      "degree": 1,
+      "cost": 0.3
+    },
+    {
+      "fingerprint": "701f1e4c69",
+      "ruleId": "CNM01",
+      "groupKey": "str|medium|volatilitylevel",
+      "degree": 1,
+      "cost": 0.3
+    }
+  ]
+}

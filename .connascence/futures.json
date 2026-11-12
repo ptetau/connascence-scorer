@@ -1,0 +1,127 @@
+{
+  "product": "connascence-scorer",
+  "updated": "2026-11-12T00:00:00Z",
+  "futures": [
+    {
+      "id": "F1",
+      "title": "More detectors and rule tweaks",
+      "description": "The scenario gap list and real-code trials keep producing detector work (arithmetic magic numbers, new noise filters). Every new rule touches the detector, the catalog, the location roles it reports and the scenarios.",
+      "likelihood": "high",
+      "horizon": "next quarter",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Core/CSharp/**",
+        "src/Connascence.Core/Generic/**",
+        "src/Connascence.Core/Catalog.cs"
+      ],
+      "keywords": [
+        "Detector",
+        "RuleId"
+      ]
+    },
+    {
+      "id": "F2",
+      "title": "Scoring weights tuned from calibration",
+      "description": "Calibration on bitwarden/server suggested re-weighting Value and Position; more trials will move strengths, distance weights and the score formula.",
+      "likelihood": "high",
+      "horizon": "next quarter",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Core/Scoring.cs",
+        "src/Connascence.Core/Settings.cs",
+        "src/Connascence.Cli/Calibrate.cs"
+      ],
+      "keywords": [
+        "Strength",
+        "DistanceWeight",
+        "Calibrate"
+      ]
+    },
+    {
+      "id": "F3",
+      "title": "Published to NuGet with real versioning",
+      "description": "The README says the tool isn't on NuGet yet. Publishing brings version numbers that must agree everywhere they are written, and release notes. Touches no findings today: the version is written in the .csproj files and in Reports.Version, and the tool doesn't read project files, so it can't link them.",
+      "likelihood": "high",
+      "horizon": "within a month",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Cli/Connascence.Cli.csproj",
+        "src/Connascence.Analyzers/Connascence.Analyzers.csproj"
+      ],
+      "keywords": [
+        "Version",
+        "PackageId"
+      ]
+    },
+    {
+      "id": "F4",
+      "title": "Report formats and CI integration grow",
+      "description": "Teams adopting it will want GitHub annotations, HTML or trend charts; the existing formats share number formats and limits.",
+      "likelihood": "medium",
+      "horizon": "within a year",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Cli/Reports.cs"
+      ],
+      "keywords": [
+        "Render",
+        "Sarif",
+        "Markdown"
+      ]
+    },
+    {
+      "id": "F5",
+      "title": "Finding ids stay stable across versions",
+      "description": "0.2.0 changed finding ids and asked users to re-baseline. Once people depend on it, ids will need to survive detector changes (migration of baselines and acceptances). Touches no findings today: Store.cs and the fingerprint code are clean.",
+      "likelihood": "medium",
+      "horizon": "within a year",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Cli/Store.cs"
+      ],
+      "keywords": [
+        "Fingerprint",
+        "Baseline",
+        "Acceptance"
+      ]
+    },
+    {
+      "id": "F6",
+      "title": "Real parsers for other languages",
+      "description": "Generic mode is text-based. TypeScript or Python projects would need syntax-aware analysis to reach C# quality.",
+      "likelihood": "medium",
+      "horizon": "1-2 years",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Core/Generic/**",
+        "src/Connascence.Cli/Workspace.cs"
+      ],
+      "keywords": [
+        "GenericEngine",
+        "SourceExtensions"
+      ]
+    },
+    {
+      "id": "F7",
+      "title": "Roslyn analyzer catches up with the CLI",
+      "description": "The analyzer package reports C# findings per project and has no tests. Users in the IDE will expect cross-project and futures-aware results.",
+      "likelihood": "low",
+      "horizon": "1-2 years",
+      "source": "explore",
+      "areas": [
+        "src/Connascence.Analyzers/**"
+      ],
+      "keywords": [
+        "ConnascenceAnalyzer"
+      ]
+    }
+  ],
+  "stable": [
+    {
+      "reason": "Git plumbing (staged files, diffs, churn) follows git's own output formats, which don't change.",
+      "areas": [
+        "src/Connascence.Cli/Git.cs"
+      ]
+    }
+  ]
+}
