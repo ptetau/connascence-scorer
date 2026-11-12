@@ -29,7 +29,7 @@ namespace Connascence.Cli
             ReadCommentHandling = JsonCommentHandling.Skip,
             AllowTrailingCommas = true,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-            Converters = { new JsonStringEnumConverter() },
+            Converters = { new JsonStringEnumConverter(), new ValueCollectionsJson() },
         };
 
         public const string FileName = ".connascence.json";

@@ -11,7 +11,7 @@ namespace Connascence.Generic
         public required string RelativePath { get; init; }
         public required string Project { get; init; }
         public required string Text { get; init; }
-        public required string[] Lines { get; init; }
+        public required ValueList<string> Lines { get; init; }
     }
 
     /// <summary>
@@ -58,14 +58,14 @@ namespace Connascence.Generic
                 .ToImmutableArray();
 
             var byPath = files.GroupBy(f => f.RelativePath).ToImmutableDictionary(g => g.Key, g => g.First().Lines);
-            Func<string, string[]?> linesOf = p => byPath.TryGetValue(p, out var l) ? l : null;
+            Func<string, IReadOnlyList<string>?> linesOf = p => byPath.TryGetValue(p, out var l) ? l : null;
             var scored = findings.Select(f => CSharp.CSharpEngine.Accepting(Scoring.Score(f, s), linesOf)).ToImmutableArray();
             return Scoring.Consolidate(scored).OrderByDescending(f => f.Cost).ToImmutableArray();
         }
 
         public static TextFile Load(string relativePath, string project, string text)
         {
-            return new TextFile { RelativePath = relativePath, Project = project, Text = text, Lines = text.Replace("\r\n", "\n").Split('\n') };
+            return new TextFile { RelativePath = relativePath, Project = project, Text = text, Lines = text.Replace("\r\n", "\n").Split('\n').ToValueList() };
         }
 
         static readonly ImmutableArray<string> CommentStarts = ImmutableArray.Create("//", "#", "*", "/*", "--", "'''", "\"\"\"");
@@ -133,7 +133,7 @@ namespace Connascence.Generic
         {
             var ignored = s.IgnoredNumbers.ToImmutableHashSet();
             var codeLike = s.CodeLikeNames.ToImmutableHashSet();
-            var platform = (s.IgnoredSubjects ?? ImmutableArray<string>.Empty).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            var platform = s.IgnoredSubjects.ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
             return files.SelectMany(f => CodeLines(f).SelectMany(cl => UsesOnLine(f, cl, ignored, codeLike, platform)))
                 .GroupBy(u => u.Key)
                 .Select(g => MagicValue(g.Key, g.First().Subject, g.Select(u => u.Location).ToImmutableArray(), ignored, codeLike))

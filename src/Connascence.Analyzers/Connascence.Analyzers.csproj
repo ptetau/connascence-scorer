@@ -31,6 +31,7 @@
     <Compile Include="..\Connascence.Core\Text.cs" Link="Core\Text.cs" />
     <Compile Include="..\Connascence.Core\Catalog.cs" Link="Core\Catalog.cs" />
     <Compile Include="..\Connascence.Core\Paths.cs" Link="Core\Paths.cs" />
+    <Compile Include="..\Connascence.Core\ValueCollections.cs" Link="Core\ValueCollections.cs" />
     <Compile Include="..\Connascence.Core\CSharp\*.cs" Link="Core\CSharp\%(Filename)%(Extension)" />
   </ItemGroup>
 

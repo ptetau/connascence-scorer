@@ -24,8 +24,8 @@ namespace Connascence
         public int Score { get; init; }
         public int AcceptedFindings { get; init; }
         public double AcceptedCost { get; init; }
-        public IReadOnlyList<KindSummary> ByKind { get; init; } = ImmutableArray<KindSummary>.Empty;
-        public IReadOnlyList<KeyValuePair<string, double>> ByFile { get; init; } = ImmutableArray<KeyValuePair<string, double>>.Empty;
+        public ValueList<KindSummary> ByKind { get; init; }
+        public ValueList<KeyValuePair<string, double>> ByFile { get; init; }
     }
 
     public static class Scoring

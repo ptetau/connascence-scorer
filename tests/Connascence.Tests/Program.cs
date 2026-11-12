@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -96,13 +97,24 @@ var tests = new List<(string Name, Action Body)>
     }),
     ("a partial weight map falls back to the defaults, ignoring key case", () =>
     {
-        var s = new Settings { DistanceWeight = new Dictionary<string, double> { ["crossProject"] = 3 } };
+        var s = new Settings { DistanceWeight = ValueMap.Of(("crossProject", 3.0)) };
         Assert(s.WeightOf(Distance.CrossProject) == 3, "crossProject should apply, got " + s.WeightOf(Distance.CrossProject));
         Assert(s.WeightOf(Distance.SameType) == 0.25, "SameType should keep its default, got " + s.WeightOf(Distance.SameType));
         Assert(!s.UnknownKeys().Any(), "crossProject is a known key");
-        var typo = new Settings { Strength = new Dictionary<string, double> { ["Meening"] = 9 } };
+        var typo = new Settings { Strength = ValueMap.Of(("Meening", 9.0)) };
         Assert(typo.UnknownKeys().SequenceEqual(new[] { "strength.Meening" }), "a misspelt kind should be reported");
         Assert(typo.StrengthOf(Kind.Meaning) == 3, "Meaning should keep its default");
+    }),
+    ("records holding lists and maps compare by value", () =>
+    {
+        Assert(new Settings() == new Settings(), "two default settings should be equal");
+        Assert(new Settings { IgnoredNumbers = ValueList.Of("0", "1") } == new Settings { IgnoredNumbers = ImmutableArray.Create("0", "1") }, "same list, same settings");
+        Assert(new Settings { IgnoredNumbers = ValueList.Of("0") } != new Settings(), "a different list should differ");
+        Assert(ValueMap.Of(("a", 1.0), ("b", 2.0)) == ValueMap.Of(("b", 2.0), ("a", 1.0)), "map equality ignores order");
+        Assert(ValueMap.Of(("a", 1.0), ("b", 2.0)).GetHashCode() == ValueMap.Of(("b", 2.0), ("a", 1.0)).GetHashCode(), "and so does its hash");
+        Assert(default(ValueList<string>).Count == 0 && default(ValueList<string>) == ValueList.Of<string>(), "default is the empty list");
+        var summary = new ScoreSummary { ByKind = ValueList.Of(new KindSummary { Kind = Kind.Meaning, Findings = 2, Cost = 6 }) };
+        Assert(summary == new ScoreSummary { ByKind = ValueList.Of(new KindSummary { Kind = Kind.Meaning, Findings = 2, Cost = 6 }) }, "equal summaries");
     }),
     ("generic mode finds a repeated status code and a fixed sleep in Python", () =>
     {

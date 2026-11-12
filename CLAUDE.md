@@ -56,13 +56,14 @@ if they aren't installed as Claude Code skills. The futures are in `.connascence
 
 ## Functional core
 
-`src/Connascence.Core` is functional C#, checked by FunctionalLint: every rule but FP0014 is a build error. Read
+`src/Connascence.Core` is functional C#, checked by FunctionalLint: every rule is a build error. Read
 `docs/functional-core.md` before changing it. In short:
 - Write new Core code functionally: records with `init`, static classes, LINQ instead of loops, no reassignment,
   immutable collections, `IReadOnlyList<T>` in signatures, `TryGetValue`/`FirstOrDefault` instead of calls that throw,
   `StringComparison.Ordinal` and `CultureInfo.InvariantCulture`. Full guide:
   `external/functional-csharp/FunctionalLint/agents/AGENTS.md`.
 - Keep to netstandard2.0 APIs: the Roslyn analyzer compiles the same source.
+- Collections inside records are `ValueList<T>` / `ValueMap<T>` (compare by contents), not arrays or immutable collections.
 - `scripts/functional-gate.py` fails if any file gains a violation. After fixing some, lock it in with `--update`.
 - Never switch a rule off (`#pragma`, `[SuppressMessage]`, `#nullable disable`, severities), and don't edit
   `functionallint.policy`. Ask the owner if a rule seems wrong.

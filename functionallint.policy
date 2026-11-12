@@ -8,11 +8,9 @@ global_level = 200
 # The functional core projects, relative to this file. The CLI, the Roslyn analyzer and the tests are shells.
 functional_lint.cores = src/Connascence.Core/Connascence.Core.csproj
 
-# Migration: Core was written imperatively, and every rule now passes except FP0014 (records holding lists, which
-# compare by reference). It stays a warning until the owner picks a value-equal collection type; see
-# docs/functional-core.md. .functionallint-baseline.json holds the count per file, and the gate fails if any grows.
-functional_lint.may_lower = FP0014
-dotnet_diagnostic.FP0014.severity = warning
+# Every rule is an error in the core: no rule may be lowered. The migration from imperative code is finished;
+# .functionallint-baseline.json is empty, and scripts/functional-gate.py fails if anything appears in it.
+functional_lint.may_lower = none
 
 # Namespaces of existing imperative code, which the rules skip and the core reaches only through adapters.
 functional_lint.legacy_namespaces = none

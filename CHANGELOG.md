@@ -16,6 +16,8 @@
   code once instead of once per function (45 s to under 2 s on 25k lines of Python).
 - `scoring.strength` and `scoring.distanceWeight` merge over the defaults and ignore key case; unknown keys are warned
   about. Before, a partial map dropped the other defaults to 1.
+- Core API: settings, the score summary and text files hold `ValueList<T>` / `ValueMap<T>`, which compare by contents,
+  so equal records are equal. The JSON (config and reports) is unchanged.
 - Core API: findings are immutable records, `Scoring.Score` returns the scored finding, and `CSharpEngine.Analyze`
   returns detector warnings with the findings instead of adding them to the context.
 - `calibrate` reports, per finding, how often two of its files changed in the same commit, overall, by kind and

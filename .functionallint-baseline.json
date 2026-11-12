@@ -1,11 +1,1 @@
-{
-  "src/Connascence.Core/Generic/GenericEngine.cs": {
-    "FP0014": 1
-  },
-  "src/Connascence.Core/Scoring.cs": {
-    "FP0014": 2
-  },
-  "src/Connascence.Core/Settings.cs": {
-    "FP0014": 6
-  }
-}
+{}

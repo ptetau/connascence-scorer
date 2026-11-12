@@ -25,7 +25,7 @@ namespace Connascence.CSharp
 
             var lines = ctx.Files.GroupBy(f => f.RelativePath)
                 .ToImmutableDictionary(g => g.Key, g => g.First().Tree.GetText().Lines.Select(l => l.ToString()).ToArray());
-            Func<string, string[]?> linesOf = p => lines.TryGetValue(p, out var l) ? l : null;
+            Func<string, IReadOnlyList<string>?> linesOf = p => lines.TryGetValue(p, out var l) ? l : null;
 
             var scored = findings
                 .Select(f => Scoring.Score(f with { Locations = Ordered(f.Locations) }, ctx.Settings))
@@ -47,7 +47,7 @@ namespace Connascence.CSharp
                 .ThenBy(l => l.File, StringComparer.Ordinal).ThenBy(l => l.Line).ToImmutableArray();
 
         /// <summary>The finding, accepted if a "connascence: accept" comment marks one of its places.</summary>
-        public static Finding Accepting(Finding f, Func<string, string[]?> linesOf) =>
+        public static Finding Accepting(Finding f, Func<string, IReadOnlyList<string>?> linesOf) =>
             InlineAcceptance.ReasonFor(linesOf, f) is { } reason ? f with { Accepted = true, AcceptedReason = "inline: " + reason } : f;
 
         /// <summary>Builds one compilation from all files so calls across projects resolve.</summary>

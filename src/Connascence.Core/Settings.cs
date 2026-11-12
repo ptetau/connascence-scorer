@@ -14,10 +14,10 @@ namespace Connascence
         // ---- Scoring ----
 
         /// <summary>Strength rank per kind. Name and Type default to 0: they are the healthy kinds and are not scored.</summary>
-        public IReadOnlyDictionary<string, double>? Strength { get; init; } = DefaultStrength;
+        public ValueMap<double> Strength { get; init; } = DefaultStrength;
 
         /// <summary>Multiplier per distance. Strong coupling close together is cheap; across projects it is dear.</summary>
-        public IReadOnlyDictionary<string, double>? DistanceWeight { get; init; } = DefaultDistanceWeight;
+        public ValueMap<double> DistanceWeight { get; init; } = DefaultDistanceWeight;
 
         /// <summary>Cost grows as degree^DegreeExponent. 1 = linear (each extra place is one more edit).</summary>
         public double DegreeExponent { get; init; } = 1.0;
@@ -35,25 +35,26 @@ namespace Connascence
         public int MinGenericParameters { get; init; } = 5;
 
         /// <summary>Numbers that are almost never "magic".</summary>
-        public IReadOnlyList<string> IgnoredNumbers { get; init; } = ImmutableArray.Create("0", "1", "-1", "2", "0.0", "1.0", "100", "0.5");
+        public ValueList<string> IgnoredNumbers { get; init; } = ValueList.Of("0", "1", "-1", "2", "0.0", "1.0", "100", "0.5");
 
         /// <summary>Member names that suggest a value is a code with hidden meaning (status, type, mode ...).</summary>
-        public IReadOnlyList<string> CodeLikeNames { get; init; } = ImmutableArray.Create(
+        public ValueList<string> CodeLikeNames { get; init; } = ValueList.Of(
             "status", "state", "type", "kind", "mode", "code", "role", "category", "level", "flag", "flags", "action", "op", "operation");
 
         /// <summary>Names whose values are fixed by a language or platform, not the app (generic mode).</summary>
-        public IReadOnlyList<string>? IgnoredSubjects { get; init; } = ImmutableArray.Create(
+        public ValueList<string> IgnoredSubjects { get; init; } = ValueList.Of(
             "readyState", "key", "keyCode", "which", "nodeType", "nodeName", "tagName", "__name__", "platform", "sys.platform", "os.name");
 
         /// <summary>Method name prefixes that suggest "call me before anything else".</summary>
-        public IReadOnlyList<string> InitMethodPrefixes { get; init; } = ImmutableArray.Create(
+        public ValueList<string> InitMethodPrefixes { get; init; } = ValueList.Of(
             "Init", "Initialize", "Initialise", "Open", "Start", "Connect", "Begin", "Setup", "SetUp", "Configure", "Load", "Prepare");
 
-        static readonly ImmutableSortedDictionary<string, double> DefaultStrength = ImmutableSortedDictionary.Create<string, double>(InEnumOrder<Kind>())
-            .SetItem("Name", 0).SetItem("Type", 0).SetItem("Meaning", 3).SetItem("Position", 4).SetItem("Algorithm", 5).SetItem("Execution", 6).SetItem("Timing", 7).SetItem("Value", 8).SetItem("Identity", 9);
+        // In enum order, so the config `init` writes reads weakest to strongest.
+        static readonly ValueMap<double> DefaultStrength = ValueMap.Of(
+            ("Name", 0.0), ("Type", 0.0), ("Meaning", 3.0), ("Position", 4.0), ("Algorithm", 5.0), ("Execution", 6.0), ("Timing", 7.0), ("Value", 8.0), ("Identity", 9.0));
 
-        static readonly ImmutableSortedDictionary<string, double> DefaultDistanceWeight = ImmutableSortedDictionary.Create<string, double>(InEnumOrder<Distance>())
-            .SetItem("SameMember", 0.1).SetItem("SameType", 0.25).SetItem("SameFile", 0.5).SetItem("SameProject", 1.0).SetItem("CrossProject", 2.0);
+        static readonly ValueMap<double> DefaultDistanceWeight = ValueMap.Of(
+            ("SameMember", 0.1), ("SameType", 0.25), ("SameFile", 0.5), ("SameProject", 1.0), ("CrossProject", 2.0));
 
         /// <summary>The configured strength for a kind (key case ignored), or the default when the config leaves it out.</summary>
         public double StrengthOf(Kind kind) =>
@@ -63,28 +64,17 @@ namespace Connascence
         public double WeightOf(Distance d) =>
             Lookup(DistanceWeight, d.ToString()) ?? Lookup(DefaultDistanceWeight, d.ToString()) ?? 1.0;
 
-        static double? Lookup(IReadOnlyDictionary<string, double>? map, string key) =>
-            map == null ? null
-            : map.TryGetValue(key, out var exact) ? exact
+        static double? Lookup(ValueMap<double> map, string key) =>
+            map.TryGetValue(key, out var exact) ? exact
             : map.Where(kv => string.Equals(kv.Key, key, StringComparison.OrdinalIgnoreCase)).Select(kv => (double?)kv.Value).FirstOrDefault();
 
         /// <summary>Keys in the strength and distance-weight maps that name no kind or distance, so they are ignored.</summary>
         public IEnumerable<string> UnknownKeys() =>
             Unknown<Kind>(Strength, "strength").Concat(Unknown<Distance>(DistanceWeight, "distanceWeight"));
 
-        static IEnumerable<string> Unknown<TEnum>(IReadOnlyDictionary<string, double>? map, string name) where TEnum : struct =>
-            (map ?? ImmutableSortedDictionary<string, double>.Empty).Keys
+        static IEnumerable<string> Unknown<TEnum>(ValueMap<double> map, string name) where TEnum : struct =>
+            map.Keys
                 .Where(k => !Enum.GetNames(typeof(TEnum)).Any(n => string.Equals(n, k, StringComparison.OrdinalIgnoreCase)))
                 .Select(k => name + "." + k);
-
-        /// <summary>
-        /// Orders keys that name an enum member (Kind, Distance) as the enum does, so the config `init` writes reads
-        /// weakest to strongest. Other keys come last, in ordinal order.
-        /// </summary>
-        static IComparer<string> InEnumOrder<TEnum>() where TEnum : struct =>
-            Comparer<string>.Create((a, b) => Rank<TEnum>(a) != Rank<TEnum>(b) ? Rank<TEnum>(a).CompareTo(Rank<TEnum>(b)) : string.CompareOrdinal(a, b));
-
-        static int Rank<TEnum>(string name) where TEnum : struct =>
-            Enum.TryParse<TEnum>(name, out var value) ? Convert.ToInt32(value, System.Globalization.CultureInfo.InvariantCulture) : int.MaxValue;
     }
 }

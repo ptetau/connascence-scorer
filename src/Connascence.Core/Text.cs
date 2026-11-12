@@ -85,7 +85,7 @@ namespace Connascence
     {
         static readonly Regex Marker = new Regex(@"connascence:\s*accept\b[:\s-]*(?<reason>.*)$", RegexOptions.IgnoreCase);
 
-        public static string? ReasonFor(Func<string, string[]?> linesOf, Finding f) =>
+        public static string? ReasonFor(Func<string, IReadOnlyList<string>?> linesOf, Finding f) =>
             f.Locations
                 .SelectMany(loc => MarkerLines(linesOf(loc.File), loc.Line))
                 .Select(line => Marker.Match(line))
@@ -95,9 +95,9 @@ namespace Connascence
                 .FirstOrDefault();
 
         /// <summary>The flagged line, then the line above it (1-based <paramref name="line"/>).</summary>
-        static IEnumerable<string> MarkerLines(string[]? lines, int line) =>
+        static IEnumerable<string> MarkerLines(IReadOnlyList<string>? lines, int line) =>
             lines == null
                 ? Enumerable.Empty<string>()
-                : new[] { line - 1, line - 2 }.Where(i => i >= 0 && i < lines.Length).Select(i => lines[i]);
+                : new[] { line - 1, line - 2 }.Where(i => i >= 0 && i < lines.Count).Select(i => lines[i]);
     }
 }
