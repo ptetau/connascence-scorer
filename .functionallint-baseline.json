@@ -1,11 +1,4 @@
 {
-  "src/Connascence.Core/CSharp/AlgorithmDetector.cs": {
-    "FP0001": 25,
-    "FP0002": 6,
-    "FP0004": 1,
-    "FP0005": 20,
-    "FP0008": 1
-  },
   "src/Connascence.Core/CSharp/CSharpContext.cs": {
     "FP0015": 1
   },
