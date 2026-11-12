@@ -1,0 +1,32 @@
+{
+  "description": "With min_cost lowered so small findings show, the analyzer still skips migrations and tests, using the same rules as the CLI. Before the rules were shared, it reported the status codes in Tally.Api/Migrations.",
+  "fixture": "tally",
+  "build": [
+    "Tally.Api",
+    "Tally.Billing.Tests"
+  ],
+  "globalconfig": "connascence.min_cost = 1\n",
+  "expect": [
+    {
+      "rule": "CNT01",
+      "file": "Tally.Billing/PaymentGateway.cs",
+      "why": "cost 7: visible once min_cost is 1"
+    },
+    {
+      "rule": "CNM01",
+      "file": "Tally.Api/InvoicesController.cs",
+      "messageContains": "The value 3 is compared with Status in 2 places in one class",
+      "why": "the migration's status checks aren't counted (before the shared rules: 5 places across 2 files)"
+    }
+  ],
+  "forbid": [
+    {
+      "fileContains": "/Migrations/",
+      "why": "migrations are skipped"
+    },
+    {
+      "fileContains": "Tally.Billing.Tests/",
+      "why": "tests are skipped by default"
+    }
+  ]
+}

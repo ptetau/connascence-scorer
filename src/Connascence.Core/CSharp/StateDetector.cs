@@ -57,7 +57,7 @@ namespace Connascence.CSharp
             {
                 var consts = kv.Value.GroupBy(c => c.Type).Select(g => g.First()).ToList();
                 if (consts.Count < 2) continue;
-                var locs = consts.Select(c => ctx.Locate(c.Declarator.Identifier, "definition")).ToList();
+                var locs = consts.Select(c => ctx.Locate(c.Declarator.Identifier, Roles.Definition)).ToList();
                 var names = consts.Select(c => c.Declarator.Identifier.Text).Distinct().ToList();
                 var values = consts.Select(c => c.Value).Distinct().ToList();
                 // Different strings under the same name are usually different things (e.g. each repository's TableName).
@@ -136,9 +136,9 @@ namespace Connascence.CSharp
                 var symbol = kv.Key;
                 // A scalar that is never assigned after its declaration is a missing readonly, not state anyone shares.
                 if (!collections.Contains(symbol) && !kv.Value.Any(IsWrite)) continue;
-                var useLocs = kv.Value.Select(n => ctx.Locate(n, "use")).GroupBy(l => l.Anchor).Select(g => g.First()).ToList();
+                var useLocs = kv.Value.Select(n => ctx.Locate(n, Roles.Use)).GroupBy(l => l.Anchor).Select(g => g.First()).ToList();
                 if (useLocs.Count < 2) continue;
-                var locs = new List<CodeLocation> { ctx.Locate(candidates[symbol], "declaration") };
+                var locs = new List<CodeLocation> { ctx.Locate(candidates[symbol], Roles.Declaration) };
                 locs.AddRange(useLocs);
                 var types = useLocs.Select(l => l.Type).Distinct().Count();
                 var owner = symbol.ContainingType?.Name ?? "";

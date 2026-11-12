@@ -124,9 +124,10 @@ coupling (a Stripe status constant defined four times) changes rarely, but a mis
 you'd rather rank by how often findings bite in your repo, lower `Value` and raise `Position` in
 `.connascence.json`; this data supports that for bitwarden.
 
-`calibrate`'s "findings at or above the gate" line is misleading: it counts file pairs, and large findings
-make many pairs, so costly findings look as if they co-change less. A per-finding measure (as in the table)
-is the better read.
+`calibrate` used to report a "findings at or above the gate" line counted in file pairs. Large findings make many
+pairs, so costly findings looked as if they co-changed less (13% against 17% overall). It now counts findings,
+as in the table above: on bitwarden, findings at or above the gate co-change as often as cheaper ones (52% against
+55%).
 
 The pairs that changed together most with no finding linking them are interfaces and their implementations
 (`IUserService` and `UserService`, a repository interface and its EF and Dapper versions). That is coupling

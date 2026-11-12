@@ -174,7 +174,7 @@ namespace Connascence.Generic
                         var key = tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant();
                         List<CodeLocation> list;
                         if (!groups.TryGetValue(key, out list)) { list = new List<CodeLocation>(); groups[key] = list; subjects[key] = subject; }
-                        list.Add(Loc(f, cl.Key, "use"));
+                        list.Add(Loc(f, cl.Key, Roles.Use));
                     }
                 }
             }
@@ -236,14 +236,14 @@ namespace Connascence.Generic
                         if (!args.Any(a => Bool.IsMatch(a) && !a.Contains("=") && !a.Contains(":"))) continue;
                         List<CodeLocation> list;
                         if (!groups.TryGetValue(fn, out list)) { list = new List<CodeLocation>(); groups[fn] = list; }
-                        list.Add(Loc(f, cl.Key, "call site"));
+                        list.Add(Loc(f, cl.Key, Roles.CallSite));
                     }
                 }
             }
             foreach (var kv in groups)
             {
                 var def = defs[kv.Key][0];
-                var locs = new List<CodeLocation> { Loc(def.File, def.Line, "declaration") };
+                var locs = new List<CodeLocation> { Loc(def.File, def.Line, Roles.Declaration) };
                 locs.AddRange(kv.Value);
                 yield return new Finding
                 {
@@ -280,11 +280,11 @@ namespace Connascence.Generic
                             var args = m.Groups["args"].Value.Split(',');
                             if (args.Length < 2) continue;
                             if (args.Skip(1).All(a => a.Contains("=") || a.Contains(":"))) continue; // all named
-                            calls.Add(Loc(f, cl.Key, "call site"));
+                            calls.Add(Loc(f, cl.Key, Roles.CallSite));
                         }
                     }
                 if (calls.Count == 0) continue;
-                var locs = new List<CodeLocation> { Loc(def.File, def.Line, "declaration") };
+                var locs = new List<CodeLocation> { Loc(def.File, def.Line, Roles.Declaration) };
                 locs.AddRange(calls);
                 yield return new Finding
                 {
@@ -359,7 +359,7 @@ namespace Connascence.Generic
 
                     var locs = distinct.Select(o =>
                     {
-                        var l = Loc(o.Key, norm[o.Key][o.Value].Key, "copy");
+                        var l = Loc(o.Key, norm[o.Key][o.Value].Key, Roles.Copy);
                         l.EndLine = norm[o.Key][o.Value + len - 1].Key + 1;
                         return l;
                     }).ToList();
@@ -396,7 +396,7 @@ namespace Connascence.Generic
                         if (t.Success) title = t.Groups["call"].Value + "(..., " + t.Groups["ms"].Value + ")";
                     }
                     if (title == null) continue;
-                    var loc = Loc(f, cl.Key, "wait");
+                    var loc = Loc(f, cl.Key, Roles.Wait);
                     yield return new Finding
                     {
                         RuleId = "GNT01",
@@ -424,9 +424,9 @@ namespace Connascence.Generic
                     var pg = PyGlobal.Match(cl.Value);
                     if (pg.Success)
                         foreach (var n in pg.Groups["names"].Value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0))
-                            Add(groups, f.Project + "|" + n, Loc(f, cl.Key, "writes global"));
+                            Add(groups, f.Project + "|" + n, Loc(f, cl.Key, Roles.WritesGlobal));
                     foreach (Match rg in RubyGlobal.Matches(cl.Value))
-                        Add(groups, f.Project + "|$" + rg.Groups["name"].Value, Loc(f, cl.Key, "writes global"));
+                        Add(groups, f.Project + "|$" + rg.Groups["name"].Value, Loc(f, cl.Key, Roles.WritesGlobal));
                 }
             foreach (var kv in groups.Where(g => g.Value.Count >= 2))
             {

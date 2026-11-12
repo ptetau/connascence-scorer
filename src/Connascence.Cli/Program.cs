@@ -203,7 +203,8 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
                 });
                 store.SaveAccepted(file);
             }
-            // After a refactor the finding is usually gone; recover what it was from the run log.
+            // After a refactor the finding is usually gone; recover what it was from the run log (costly findings),
+            // then from the baseline (every finding that existed when it was taken).
             string rule = f?.RuleId, title = f?.Title;
             double cost = f?.Cost ?? 0;
             if (f == null)
@@ -217,6 +218,8 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
                     double.TryParse(Str(hit, "cost"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out cost);
                     break;
                 }
+                var known = rule == null ? store.Baseline()?.Items?.FirstOrDefault(b => b.Fingerprint == id) : null;
+                if (known != null) { rule = known.RuleId; title = known.Title; cost = known.Cost; }
             }
             store.LogDecision(new Decision
             {
@@ -256,7 +259,7 @@ Exit codes: 0 ok, 1 check failed, 2 usage or runtime error.";
                 Fingerprints = r.Findings.Where(f => !f.Accepted).Select(f => f.Fingerprint).Distinct().ToList(),
                 Items = r.Findings.Where(f => !f.Accepted).Select(f => new BaselineItem
                 {
-                    Fingerprint = f.Fingerprint, RuleId = f.RuleId, GroupKey = f.GroupKey, Degree = f.Degree, Cost = f.Cost,
+                    Fingerprint = f.Fingerprint, RuleId = f.RuleId, Title = f.Title, GroupKey = f.GroupKey, Degree = f.Degree, Cost = f.Cost,
                 }).ToList(),
             });
             Console.WriteLine("Baseline saved with " + r.Findings.Count(f => !f.Accepted) + " findings (score " + r.Summary.Score + "). 'check' will now only fail on new ones.");

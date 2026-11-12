@@ -79,7 +79,7 @@ namespace Connascence.CSharp
                 if (hits.Count < 2 && !(codeSubject && !isLimit)) continue;
                 if (hits.Count < 2 && first.Literal.IsKind(SyntaxKind.NumericLiteralExpression) && ignored.Contains(NumberText(first.Literal))) continue;
 
-                var locs = hits.Select(h => ctx.Locate(h.Literal, "use")).ToList();
+                var locs = hits.Select(h => ctx.Locate(h.Literal, Roles.Use)).ToList();
                 var value = isString ? "\"" + Text.Quote(first.Literal.Token.ValueText) + "\"" : NumberText(first.Literal);
                 var subject = first.Subject;
 
@@ -318,9 +318,9 @@ namespace Connascence.CSharp
                 {
                     var tok = decl is MethodDeclarationSyntax md ? md.Identifier
                             : decl is ConstructorDeclarationSyntax cd ? cd.Identifier : decl.GetFirstToken();
-                    locs.Add(ctx.Locate(tok, "declaration"));
+                    locs.Add(ctx.Locate(tok, Roles.Declaration));
                 }
-                locs.AddRange(flagged.Select(c => ctx.Locate(c.Node, "call site")));
+                locs.AddRange(flagged.Select(c => ctx.Locate(c.Node, Roles.CallSite)));
 
                 var name = method.MethodKind == MethodKind.Constructor ? "new " + method.ContainingType.Name : method.Name;
                 var param = flagParams.Count > 0 ? string.Join(", ", flagParams.ToArray()) : "a bool parameter";

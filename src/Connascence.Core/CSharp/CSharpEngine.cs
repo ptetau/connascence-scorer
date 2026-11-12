@@ -32,7 +32,7 @@ namespace Connascence.CSharp
 
             foreach (var f in findings)
             {
-                f.Locations = f.Locations.OrderBy(l => l.Role == "declaration" || l.Role == "definition" || l.Role == "setup method" ? 0 : 1)
+                f.Locations = f.Locations.OrderBy(l => l.Role == Roles.Declaration || l.Role == Roles.Definition || l.Role == Roles.SetupMethod ? 0 : 1)
                     .ThenBy(l => l.File, StringComparer.Ordinal).ThenBy(l => l.Line).ToList();
                 Scoring.Score(f, ctx.Settings);
                 var reason = InlineAcceptance.ReasonFor(linesOf, f);

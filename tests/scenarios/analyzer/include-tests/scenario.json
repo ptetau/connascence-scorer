@@ -1,0 +1,7 @@
+{
+  "description": "connascence.include_tests = true analyses test projects too, like includeTests in the CLI.",
+  "fixture": "tally",
+  "build": ["Tally.Billing.Tests"],
+  "globalconfig": "connascence.min_cost = 1\nconnascence.include_tests = true\n",
+  "expect": [ { "rule": "CNT01", "file": "Tally.Billing.Tests/InvoiceServiceTests.cs", "why": "the test's Thread.Sleep(50)" } ]
+}

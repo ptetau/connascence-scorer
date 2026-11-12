@@ -6,6 +6,7 @@ Three suites, each a folder of scenarios:
   detection/  Does each detector find the coupling it should, and stay quiet where it shouldn't?
   changes/    When a realistic change lands, did the tool point at the places that had to change together?
   gate/       Does `connascence check` block and pass the right commits?
+  analyzer/   Does the Roslyn analyzer report the same kinds of findings as build warnings, with the same skip rules?
 
 Each scenario is a folder with a scenario.json. An expectation can carry "gap": "<why>" to mark a known
 weakness. A gap that fails is reported as GAP and doesn't fail the run. A gap that passes is reported as
@@ -20,6 +21,7 @@ import argparse
 import difflib
 import glob
 import json
+import re
 import os
 import shlex
 import shutil
@@ -373,6 +375,12 @@ def run_gate(ctx, scenario_dir, spec, res, name):
                     want = step.get("exit", 0)
                     res.add("gate", name, label, p.returncode == want,
                             "exit " + str(p.returncode) + ", wanted " + str(want) + "\n" + p.stdout + p.stderr)
+                elif "decisionLogged" in step:
+                    want = step["decisionLogged"]
+                    rows = [json.loads(l) for l in open(os.path.join(root, ".connascence", "log", "decisions.jsonl")) if l.strip()]
+                    rows = [r for r in rows if r.get("fingerprint") == ids[want["id"]]]
+                    problems = [k + " is " + repr(rows[-1].get(k) if rows else None) + ", wanted " + repr(v) for k, v in want.items() if k != "id" and (not rows or rows[-1].get(k) != v)]
+                    res.add("gate", name, label, not problems, "; ".join(problems) or "logged")
                 elif "reopenId" in step:
                     p = ctx.run(["reopen", ids[step["reopenId"]], root], cwd=root)
                     res.add("gate", name, label, p.returncode == 0, p.stdout + p.stderr)
@@ -401,9 +409,87 @@ def run_gate(ctx, scenario_dir, spec, res, name):
                 return
 
 
+# ---------------------------------------------------------------- analyzer suite
+
+DIAGNOSTIC = re.compile(r"^(?P<path>.+?)\((?P<line>\d+),\d+\): (?P<severity>warning|error) (?P<rule>CN[A-Z]\d\d): (?P<message>.*?)(?: \[[^\]]+\])?$")
+
+
+def find_analyzer():
+    dlls = sorted(glob.glob(os.path.join(REPO, "src", "Connascence.Analyzers", "bin", "*", "netstandard2.0", "Connascence.Analyzers.dll")),
+                  key=os.path.getmtime, reverse=True)
+    return dlls[0] if dlls else None
+
+
+def diag_matches(d, m):
+    if "rule" in m and d["rule"] != m["rule"]:
+        return False
+    if "file" in m and not d["file"].endswith(m["file"]):
+        return False
+    if "fileContains" in m and m["fileContains"] not in d["file"]:
+        return False
+    if "messageContains" in m and m["messageContains"] not in d["message"]:
+        return False
+    if "severity" in m and d["severity"] != m["severity"]:
+        return False
+    return True
+
+
+def run_analyzer(ctx, scenario_dir, spec, res, name):
+    """Builds a copy of the fixture with the Roslyn analyzer attached and checks the build diagnostics."""
+    dll = find_analyzer()
+    if dll is None:
+        res.add("analyzer", name, "analyzer is built", False, "Run dotnet build first.")
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        root = source_root(scenario_dir, spec, tmp)
+        with open(os.path.join(root, "Directory.Build.props"), "w") as f:
+            f.write('<Project><ItemGroup><Analyzer Include="' + dll + '" /></ItemGroup></Project>\n')
+        if spec.get("globalconfig") is not None:
+            with open(os.path.join(root, ".globalconfig"), "w") as f:
+                f.write("is_global = true\n" + spec["globalconfig"])
+        for e in spec.get("edits", []):
+            path = os.path.join(root, e["file"])
+            text = open(path).read()
+            if e["old"] not in text:
+                raise RuntimeError("edit not applied, text not found in " + e["file"] + ": " + e["old"])
+            with open(path, "w") as f:
+                f.write(text.replace(e["old"], e["new"]))
+        # No shared compiler server: it caches analyzer assemblies by path, so a rebuilt analyzer could go unseen.
+        targets = spec.get("build", ["."])
+        targets = [targets] if isinstance(targets, str) else targets
+        exit_code, output = 0, ""
+        for target in targets:
+            p = subprocess.run(["dotnet", "build", target, "-nologo", "--no-incremental", "-nodeReuse:false",
+                                "-p:UseSharedCompilation=false", "-p:TreatWarningsAsErrors=false"],
+                               cwd=root, capture_output=True, text=True)
+            exit_code = exit_code or p.returncode
+            output += p.stdout
+        diags = {}
+        for line in output.splitlines():
+            m = DIAGNOSTIC.match(line.strip())
+            if m:
+                d = m.groupdict()
+                d["file"] = os.path.relpath(d["path"], root).replace(os.sep, "/")
+                diags[(d["file"], d["line"], d["rule"], d["message"])] = d
+        found = list(diags.values())
+        summary = "\n".join(d["severity"] + " " + d["rule"] + " " + d["file"] + ":" + d["line"] + " " + d["message"][:80] for d in found) or "(no CN diagnostics)"
+        if ctx.verbose:
+            print(summary)
+        if "buildExit" in spec:
+            res.add("analyzer", name, "build exits " + str(spec["buildExit"]), (exit_code == 0) == (spec["buildExit"] == 0),
+                    "exit " + str(exit_code) + "\n" + "\n".join(l for l in output.splitlines() if " error " in l)[:1500])
+        for e in spec.get("expect", []):
+            res.add("analyzer", name, "reports " + describe(e) + (" - " + e["why"] if e.get("why") else ""),
+                    any(diag_matches(d, e) for d in found), summary, e.get("gap"))
+        for e in spec.get("forbid", []):
+            bad = [d for d in found if diag_matches(d, e)]
+            res.add("analyzer", name, "does not report " + describe(e) + (" - " + e["why"] if e.get("why") else ""), not bad,
+                    "\n".join(d["rule"] + " " + d["file"] + ":" + d["line"] for d in bad), e.get("gap"))
+
+
 # ---------------------------------------------------------------- main
 
-SUITES = {"detection": run_detection, "changes": run_change, "gate": run_gate}
+SUITES = {"detection": run_detection, "changes": run_change, "gate": run_gate, "analyzer": run_analyzer}
 
 
 def main():
