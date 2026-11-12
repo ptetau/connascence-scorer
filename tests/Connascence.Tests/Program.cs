@@ -122,8 +122,8 @@ static List<Finding> Analyze(params (string Project, string File, string Code)[]
     var refs = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string ?? "").Split(Path.PathSeparator)
         .Where(p => p.Length > 0).Select(p => (MetadataReference)MetadataReference.CreateFromFile(p));
     var ctx = CSharpEngine.FromSources(sources.Select(s => new SourceInput { Path = s.File, RelativePath = s.Project + "/" + s.File, Project = s.Project, Text = s.Code }), refs, new Settings());
-    var findings = CSharpEngine.Analyze(ctx);
-    if (ctx.Warnings.Count > 0) throw new Exception(string.Join("; ", ctx.Warnings));
+    var (findings, warnings) = CSharpEngine.Analyze(ctx);
+    if (warnings.Count > 0) throw new Exception(string.Join("; ", warnings));
     return findings.ToList();
 }
 

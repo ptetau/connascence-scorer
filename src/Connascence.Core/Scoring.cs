@@ -24,8 +24,8 @@ namespace Connascence
         public int Score { get; init; }
         public int AcceptedFindings { get; init; }
         public double AcceptedCost { get; init; }
-        public IReadOnlyList<KindSummary> ByKind { get; set; } = new List<KindSummary>();
-        public IReadOnlyList<KeyValuePair<string, double>> ByFile { get; set; } = new List<KeyValuePair<string, double>>();
+        public IReadOnlyList<KindSummary> ByKind { get; init; } = ImmutableArray<KindSummary>.Empty;
+        public IReadOnlyList<KeyValuePair<string, double>> ByFile { get; init; } = ImmutableArray<KeyValuePair<string, double>>.Empty;
     }
 
     public static class Scoring
@@ -35,15 +35,9 @@ namespace Connascence
         {
             if (locs.Count <= 1) return Distance.SameMember;
             if (locs.Select(l => l.Project).Distinct().Count() > 1) return Distance.CrossProject;
-            var d = Distance.SameMember;
-            var distinct = locs.GroupBy(l => l.Anchor + "|" + (l.Type == null ? l.Line.ToString(CultureInfo.InvariantCulture) : "")).Select(g => g.First()).Take(200).ToList();
-            for (int i = 0; i < distinct.Count; i++)
-                for (int j = i + 1; j < distinct.Count; j++)
-                {
-                    var pair = Between(distinct[i], distinct[j]);
-                    if (pair > d) d = pair;
-                }
-            return d;
+            var distinct = locs.GroupBy(l => l.Anchor + "|" + (l.Type == null ? l.Line.ToString(CultureInfo.InvariantCulture) : "")).Select(g => g.First()).Take(200).ToImmutableArray();
+            return distinct.SelectMany((a, i) => distinct.Skip(i + 1).Select(b => Between(a, b)))
+                .Aggregate(Distance.SameMember, (widest, d) => d > widest ? d : widest);
         }
 
         static Distance Between(CodeLocation a, CodeLocation b)
@@ -81,9 +75,7 @@ namespace Connascence
             using (var sha = SHA1.Create())
             {
                 var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
-                var sb = new StringBuilder();
-                for (int i = 0; i < 5; i++) sb.Append(bytes[i].ToString("x2", CultureInfo.InvariantCulture));
-                return sb.ToString();
+                return string.Concat(bytes.Take(5).Select(b => b.ToString("x2", CultureInfo.InvariantCulture)));
             }
         }
 
@@ -137,11 +129,11 @@ namespace Connascence
 
         public static ScoreSummary Summarise(IReadOnlyList<Finding> findings, int lines, int files, Settings s)
         {
-            var open = findings.Where(f => !f.Accepted).ToList();
+            var open = findings.Where(f => !f.Accepted).ToImmutableArray();
             var total = open.Sum(f => f.Cost);
             var kloc = Math.Max(lines, 1) / 1000.0;
             var load = total / Math.Max(kloc, 0.2); // floor stops tiny repos swinging wildly
-            var summary = new ScoreSummary
+            return new ScoreSummary
             {
                 Lines = lines,
                 Files = files,
@@ -150,26 +142,22 @@ namespace Connascence
                 Score = (int)Math.Round(100 * Math.Exp(-load / Math.Max(s.ScoreScale, 1))),
                 AcceptedFindings = findings.Count(f => f.Accepted),
                 AcceptedCost = Math.Round(findings.Where(f => f.Accepted).Sum(f => f.Cost), 1),
+                ByKind = open.GroupBy(f => f.Kind)
+                    .Select(g => new KindSummary { Kind = g.Key, Findings = g.Count(), Cost = Math.Round(g.Sum(f => f.Cost), 1) })
+                    .OrderByDescending(k => k.Cost).ToImmutableArray(),
+                ByFile = CostPerFile(open).OrderByDescending(p => p.Value)
+                    .Select(p => new KeyValuePair<string, double>(p.Key, Math.Round(p.Value, 1))).ToImmutableArray(),
             };
-            summary.ByKind = open.GroupBy(f => f.Kind)
-                .Select(g => new KindSummary { Kind = g.Key, Findings = g.Count(), Cost = Math.Round(g.Sum(f => f.Cost), 1) })
-                .OrderByDescending(k => k.Cost).ToList();
-
-            // Spread each finding's cost evenly over the files it touches.
-            var perFile = new Dictionary<string, double>();
-            foreach (var f in open)
-            {
-                var fs = f.Files.ToList();
-                foreach (var file in fs)
-                {
-                    double cur;
-                    perFile.TryGetValue(file, out cur);
-                    perFile[file] = cur + f.Cost / fs.Count;
-                }
-            }
-            summary.ByFile = perFile.OrderByDescending(p => p.Value)
-                .Select(p => new KeyValuePair<string, double>(p.Key, Math.Round(p.Value, 1))).ToList();
-            return summary;
         }
+
+        /// <summary>Each finding's cost, spread evenly over the files it touches, totalled per file (in order of first appearance).</summary>
+        static IEnumerable<KeyValuePair<string, double>> CostPerFile(IEnumerable<Finding> open) =>
+            open.SelectMany(f =>
+                {
+                    var files = f.Files.ToImmutableArray();
+                    return files.Select(file => (File: file, Share: f.Cost / files.Length));
+                })
+                .GroupBy(x => x.File)
+                .Select(g => new KeyValuePair<string, double>(g.Key, g.Aggregate(0.0, (sum, x) => sum + x.Share)));
     }
 }

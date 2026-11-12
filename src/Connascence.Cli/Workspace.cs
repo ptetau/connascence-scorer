@@ -91,8 +91,9 @@ namespace Connascence.Cli
             if (csharp.Count > 0)
             {
                 var ctx = CSharpEngine.FromSources(csharp, References(), settings);
-                result.Findings.AddRange(CSharpEngine.Analyze(ctx));
-                result.Warnings.AddRange(ctx.Warnings);
+                var (found, warnings) = CSharpEngine.Analyze(ctx);
+                result.Findings.AddRange(found);
+                result.Warnings.AddRange(warnings);
             }
             if (generic.Count > 0) result.Findings.AddRange(GenericEngine.Analyze(generic, settings));
             if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings).ToList();

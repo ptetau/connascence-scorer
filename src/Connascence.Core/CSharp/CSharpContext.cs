@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -24,36 +25,36 @@ namespace Connascence.CSharp
     }
 
     /// <summary>Everything a detector needs: syntax, semantics, settings and helpers to describe locations.</summary>
-    public sealed class CSharpContext
+    /// <remarks>Equality is by identity: a context stands for one compilation, and its caches aren't values.</remarks>
+    public sealed record CSharpContext
     {
-        readonly IReadOnlyDictionary<SyntaxTree, SourceFile> _files;
-        readonly Dictionary<SyntaxTree, SemanticModel> _models = new Dictionary<SyntaxTree, SemanticModel>();
-        Dictionary<IMethodSymbol, List<CallSite>>? _calls;
+        public bool Equals(CSharpContext? other) => ReferenceEquals(this, other);
+
+        public override int GetHashCode() => System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(this);
+
+        readonly ImmutableDictionary<SyntaxTree, SourceFile> _files;
+        readonly ImmutableDictionary<SyntaxTree, SemanticModel> _models;
+        readonly Lazy<ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>>> _calls;
 
         public CSharpContext(Compilation compilation, IEnumerable<SourceFile> files, Settings? settings)
         {
             Compilation = compilation;
-            Files = files.ToList();
+            Files = files.ToImmutableArray();
             Settings = settings ?? new Settings();
-            _files = Files.ToDictionary(f => f.Tree);
+            _files = Files.GroupBy(f => f.Tree).ToImmutableDictionary(g => g.Key, g => g.First());
+            _models = _files.Keys.ToImmutableDictionary(tree => tree, tree => compilation.GetSemanticModel(tree));
+            _calls = new Lazy<ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>>>(FindCalls);
         }
 
         public Compilation Compilation { get; }
-        public IReadOnlyList<SourceFile> Files { get; }
+        public ImmutableArray<SourceFile> Files { get; }
         public Settings Settings { get; }
-        public List<string> Warnings { get; } = new List<string>();
 
         public IEnumerable<SyntaxNode> Roots => Files.Select(f => f.Tree.GetRoot());
 
-        public SemanticModel Model(SyntaxTree tree)
-        {
-            if (!_models.TryGetValue(tree, out var m))
-            {
-                m = Compilation.GetSemanticModel(tree);
-                _models[tree] = m;
-            }
-            return m;
-        }
+        /// <summary>The semantic model for a tree: shared for the analysed files, made fresh for any other tree.</summary>
+        public SemanticModel Model(SyntaxTree tree) =>
+            _models.TryGetValue(tree, out var m) ? m : Compilation.GetSemanticModel(tree);
 
         public SourceFile? FileOf(SyntaxTree? tree)
         {
@@ -76,41 +77,36 @@ namespace Connascence.CSharp
 
         public static bool IsInSource(ISymbol? s) => s != null && s.Locations.Any(l => l.IsInSource);
 
-        /// <summary>All calls to source-declared methods and constructors, keyed by the original definition.</summary>
-        public IReadOnlyDictionary<IMethodSymbol, List<CallSite>> Calls
+        /// <summary>All calls to source-declared methods and constructors, keyed by the original definition. Found on first use.</summary>
+        public IReadOnlyDictionary<IMethodSymbol, ImmutableArray<CallSite>> Calls => _calls.Value;
+
+        ImmutableDictionary<IMethodSymbol, ImmutableArray<CallSite>> FindCalls() =>
+            Roots.SelectMany(root => root.DescendantNodes())
+                .Select(CallAt)
+                .OfType<CallSite>()
+                .GroupBy(c => c.Target, SameMethod)
+                .ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray(), SameMethod);
+
+        static readonly IEqualityComparer<IMethodSymbol> SameMethod = SymbolEqualityComparer.Default;
+
+        /// <summary>The call this node makes to a method or constructor declared in the analysed source, if it is one.</summary>
+        CallSite? CallAt(SyntaxNode node)
         {
-            get
+            var args = node switch
             {
-                if (_calls != null) return _calls;
-                _calls = new Dictionary<IMethodSymbol, List<CallSite>>(SymbolEqualityComparer.Default);
-                foreach (var root in Roots)
-                {
-                    foreach (var node in root.DescendantNodes())
-                    {
-                        ArgumentListSyntax? args = null;
-                        if (node is InvocationExpressionSyntax inv) args = inv.ArgumentList;
-                        else if (node is BaseObjectCreationExpressionSyntax oc) args = oc.ArgumentList;
-                        else if (node is ConstructorInitializerSyntax ci) args = ci.ArgumentList;
-                        else continue;
-                        if (args == null) continue;
-
-                        var sym = SymbolOf(node) as IMethodSymbol;
-                        if (sym == null) continue;
-                        if (sym.ReducedFrom != null) sym = sym.ReducedFrom;
-                        sym = sym.OriginalDefinition;
-                        if (!IsInSource(sym)) continue;
-
-                        if (!_calls.TryGetValue(sym, out var list)) { list = new List<CallSite>(); _calls[sym] = list; }
-                        list.Add(new CallSite { Node = node, Args = args, Target = sym });
-                    }
-                }
-                return _calls;
-            }
+                InvocationExpressionSyntax inv => inv.ArgumentList,
+                BaseObjectCreationExpressionSyntax oc => oc.ArgumentList,
+                ConstructorInitializerSyntax ci => ci.ArgumentList,
+                _ => null,
+            };
+            if (args == null || !(SymbolOf(node) is IMethodSymbol sym)) return null;
+            var target = (sym.ReducedFrom ?? sym).OriginalDefinition;
+            return IsInSource(target) ? new CallSite { Node = node, Args = args, Target = target } : null;
         }
 
         public IReadOnlyList<CallSite> CallsTo(IMethodSymbol? m)
         {
-            return m != null && Calls.TryGetValue(m.OriginalDefinition, out var list) ? list : new List<CallSite>();
+            return m != null && Calls.TryGetValue(m.OriginalDefinition, out var list) ? list : ImmutableArray<CallSite>.Empty;
         }
 
         // ---------- Describing locations ----------
@@ -130,8 +126,8 @@ namespace Connascence.CSharp
             var file = FileOf(tree);
             var pos = tree.GetLineSpan(span).StartLinePosition;
             var text = tree.GetText();
-            var line = text.Lines[pos.Line].ToString().Trim();
-            if (line.Length > 160) line = line.Substring(0, 157) + "...";
+            var full = text.Lines[pos.Line].ToString().Trim();
+            var line = full.Length > 160 ? full.Substring(0, 157) + "..." : full;
             return new CodeLocation
             {
                 File = file != null ? file.RelativePath : tree.FilePath,
@@ -147,36 +143,33 @@ namespace Connascence.CSharp
 
         public static string? TypeNameOf(SyntaxNode? node)
         {
-            var names = node?.AncestorsAndSelf().OfType<BaseTypeDeclarationSyntax>().Select(t => t.Identifier.Text).Reverse().ToList();
-            if (names == null || names.Count == 0)
+            var names = node?.AncestorsAndSelf().OfType<BaseTypeDeclarationSyntax>().Select(t => t.Identifier.Text).Reverse().ToImmutableArray();
+            if (names == null || names.Value.Length == 0)
                 return node != null && node.AncestorsAndSelf().OfType<GlobalStatementSyntax>().Any() ? "<Program>" : null;
-            return string.Join(".", names.ToArray());
+            return string.Join(".", names.Value);
         }
 
-        public static string? MemberNameOf(SyntaxNode? node)
+        public static string? MemberNameOf(SyntaxNode? node) =>
+            node?.AncestorsAndSelf().Select(MemberStep).FirstOrDefault(step => step.Found).Name;
+
+        /// <summary>The member a node names, if it is a member; or found with no name, if it is a type (stop looking there).</summary>
+        static (bool Found, string? Name) MemberStep(SyntaxNode a) => a switch
         {
-            if (node == null) return null;
-            foreach (var a in node.AncestorsAndSelf())
-            {
-                switch (a)
-                {
-                    case MethodDeclarationSyntax m: return m.Identifier.Text;
-                    case ConstructorDeclarationSyntax _: return ".ctor";
-                    case DestructorDeclarationSyntax _: return ".dtor";
-                    case PropertyDeclarationSyntax p: return p.Identifier.Text;
-                    case IndexerDeclarationSyntax _: return "this[]";
-                    case EventDeclarationSyntax e: return e.Identifier.Text;
-                    case OperatorDeclarationSyntax o: return "operator " + o.OperatorToken.Text;
-                    case ConversionOperatorDeclarationSyntax _: return "operator conversion";
-                    case FieldDeclarationSyntax f: return f.Declaration.Variables.First().Identifier.Text;
-                    case EventFieldDeclarationSyntax ef: return ef.Declaration.Variables.First().Identifier.Text;
-                    case EnumMemberDeclarationSyntax em: return em.Identifier.Text;
-                    case GlobalStatementSyntax _: return "<Main>";
-                    case BaseTypeDeclarationSyntax _: return null;
-                }
-            }
-            return null;
-        }
+            MethodDeclarationSyntax m => (true, m.Identifier.Text),
+            ConstructorDeclarationSyntax _ => (true, ".ctor"),
+            DestructorDeclarationSyntax _ => (true, ".dtor"),
+            PropertyDeclarationSyntax p => (true, p.Identifier.Text),
+            IndexerDeclarationSyntax _ => (true, "this[]"),
+            EventDeclarationSyntax e => (true, e.Identifier.Text),
+            OperatorDeclarationSyntax o => (true, "operator " + o.OperatorToken.Text),
+            ConversionOperatorDeclarationSyntax _ => (true, "operator conversion"),
+            FieldDeclarationSyntax f => (true, f.Declaration.Variables.First().Identifier.Text),
+            EventFieldDeclarationSyntax ef => (true, ef.Declaration.Variables.First().Identifier.Text),
+            EnumMemberDeclarationSyntax em => (true, em.Identifier.Text),
+            GlobalStatementSyntax _ => (true, "<Main>"),
+            BaseTypeDeclarationSyntax _ => (true, null),
+            _ => (false, null),
+        };
 
         /// <summary>Short display name like "OrderService.Ship".</summary>
         public static string Describe(CodeLocation l)
