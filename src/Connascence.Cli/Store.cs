@@ -33,6 +33,7 @@ namespace Connascence.Cli
     {
         public string Fingerprint { get; set; }
         public string RuleId { get; set; }
+        public string Title { get; set; }
         public string GroupKey { get; set; }
         public int Degree { get; set; }
         public double Cost { get; set; }

@@ -373,6 +373,12 @@ def run_gate(ctx, scenario_dir, spec, res, name):
                     want = step.get("exit", 0)
                     res.add("gate", name, label, p.returncode == want,
                             "exit " + str(p.returncode) + ", wanted " + str(want) + "\n" + p.stdout + p.stderr)
+                elif "decisionLogged" in step:
+                    want = step["decisionLogged"]
+                    rows = [json.loads(l) for l in open(os.path.join(root, ".connascence", "log", "decisions.jsonl")) if l.strip()]
+                    rows = [r for r in rows if r.get("fingerprint") == ids[want["id"]]]
+                    problems = [k + " is " + repr(rows[-1].get(k) if rows else None) + ", wanted " + repr(v) for k, v in want.items() if k != "id" and (not rows or rows[-1].get(k) != v)]
+                    res.add("gate", name, label, not problems, "; ".join(problems) or "logged")
                 elif "reopenId" in step:
                     p = ctx.run(["reopen", ids[step["reopenId"]], root], cwd=root)
                     res.add("gate", name, label, p.returncode == 0, p.stdout + p.stderr)
