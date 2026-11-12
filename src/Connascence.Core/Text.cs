@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -10,15 +11,8 @@ namespace Connascence
     public static class Text
     {
         /// <summary>FNV-1a hash. Unlike string.GetHashCode it is the same in every process, so ids stay stable.</summary>
-        public static string StableHash(string? s)
-        {
-            unchecked
-            {
-                uint h = 2166136261;
-                foreach (var c in s ?? "") { h ^= c; h *= 16777619; }
-                return h.ToString("x8", CultureInfo.InvariantCulture);
-            }
-        }
+        public static string StableHash(string? s) =>
+            (s ?? "").Aggregate(2166136261u, (h, c) => unchecked((h ^ c) * 16777619u)).ToString("x8", CultureInfo.InvariantCulture);
 
         public static string Places(int n) => n == 1 ? "1 place" : n + " places";
 
@@ -50,9 +44,9 @@ namespace Connascence
         /// <summary>"A.Foo, B.Bar and 3 more"</summary>
         public static string Members(IEnumerable<CodeLocation> locs, int max = 3)
         {
-            var names = locs.Select(l => l.Type == null ? l.File : (l.Member == null ? l.Type : l.Type + "." + l.Member)).Distinct().ToList();
-            if (names.Count <= max) return Join(names);
-            return string.Join(", ", names.Take(max).ToArray()) + " and " + (names.Count - max) + " more";
+            var names = locs.Select(l => l.Type == null ? l.File : (l.Member == null ? l.Type : l.Type + "." + l.Member)).Distinct().ToImmutableArray();
+            if (names.Length <= max) return Join(names);
+            return string.Join(", ", names.Take(max).ToArray()) + " and " + (names.Length - max) + " more";
         }
 
         public static string Join(IReadOnlyList<string> items)
@@ -62,28 +56,23 @@ namespace Connascence
             return string.Join(", ", items.Take(items.Count - 1).ToArray()) + " and " + items[items.Count - 1];
         }
 
-        public static string Quote(string? literal)
-        {
-            if (literal == null) return "";
-            if (literal.Length > 40) literal = literal.Substring(0, 37) + "...";
-            return literal;
-        }
+        public static string Quote(string? literal) =>
+            literal == null ? "" : literal.Length > 40 ? literal.Substring(0, 37) + "..." : literal;
 
         /// <summary>Splits "MaxNameLength", "MAX_NAME_LENGTH", "maxNameLength" into lower-case words.</summary>
-        public static List<string> Words(string? identifier)
+        public static IReadOnlyList<string> Words(string? identifier)
         {
-            var spaced = Regex.Replace(identifier ?? "", "([a-z0-9])([A-Z])", "$1 $2");
-            spaced = Regex.Replace(spaced, "([A-Z]+)([A-Z][a-z])", "$1 $2");
+            var camel = Regex.Replace(identifier ?? "", "([a-z0-9])([A-Z])", "$1 $2");
+            var spaced = Regex.Replace(camel, "([A-Z]+)([A-Z][a-z])", "$1 $2");
             return spaced.Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries)
-                .Select(w => w.ToLowerInvariant()).ToList();
+                .Select(w => w.ToLowerInvariant()).ToImmutableArray();
         }
 
         public static string PascalCase(string? s)
         {
             var words = Words(Regex.Replace(s ?? "", "[^A-Za-z0-9_ ]", " "));
-            var result = string.Concat(words.Select(w => char.ToUpperInvariant(w[0]) + w.Substring(1)).ToArray());
-            if (result.Length == 0 || char.IsDigit(result[0])) result = "Value" + result;
-            return result;
+            var joined = string.Concat(words.Select(w => char.ToUpperInvariant(w[0]) + w.Substring(1)).ToArray());
+            return joined.Length == 0 || char.IsDigit(joined[0]) ? "Value" + joined : joined;
         }
     }
 
@@ -96,24 +85,19 @@ namespace Connascence
     {
         static readonly Regex Marker = new Regex(@"connascence:\s*accept\b[:\s-]*(?<reason>.*)$", RegexOptions.IgnoreCase);
 
-        public static string? ReasonFor(Func<string, string[]?> linesOf, Finding f)
-        {
-            foreach (var loc in f.Locations)
-            {
-                var lines = linesOf(loc.File);
-                if (lines == null) continue;
-                for (int i = loc.Line - 1; i >= Math.Max(0, loc.Line - 2); i--)
-                {
-                    if (i >= lines.Length) continue;
-                    var m = Marker.Match(lines[i]);
-                    if (m.Success)
-                    {
-                        var reason = m.Groups["reason"].Value.Trim().TrimEnd('*', '/', ' ', '-', '#').Trim();
-                        return reason.Length == 0 ? "(no reason given)" : reason;
-                    }
-                }
-            }
-            return null;
-        }
+        public static string? ReasonFor(Func<string, string[]?> linesOf, Finding f) =>
+            f.Locations
+                .SelectMany(loc => MarkerLines(linesOf(loc.File), loc.Line))
+                .Select(line => Marker.Match(line))
+                .Where(m => m.Success)
+                .Select(m => m.Groups["reason"].Value.Trim().TrimEnd('*', '/', ' ', '-', '#').Trim())
+                .Select(reason => reason.Length == 0 ? "(no reason given)" : reason)
+                .FirstOrDefault();
+
+        /// <summary>The flagged line, then the line above it (1-based <paramref name="line"/>).</summary>
+        static IEnumerable<string> MarkerLines(string[]? lines, int line) =>
+            lines == null
+                ? Enumerable.Empty<string>()
+                : new[] { line - 1, line - 2 }.Where(i => i >= 0 && i < lines.Length).Select(i => lines[i]);
     }
 }

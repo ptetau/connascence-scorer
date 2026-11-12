@@ -91,8 +91,7 @@ var tests = new List<(string Name, Action Body)>
     ("cost follows strength x degree x distance", () =>
     {
         var s = new Settings();
-        var f = new Finding { RuleId = "X", Kind = Kind.Meaning, Degree = 4, FixedDistance = Distance.CrossProject, Locations = { new CodeLocation { File = "a", Project = "p" } } };
-        Scoring.Score(f, s);
+        var f = Scoring.Score(new Finding { RuleId = "X", Kind = Kind.Meaning, Degree = 4, FixedDistance = Distance.CrossProject, Locations = new[] { new CodeLocation { File = "a", Project = "p" } } }, s);
         Assert(Math.Abs(f.Cost - 3 * 4 * 2.0) < 0.001, "cost was " + f.Cost);
     }),
     ("generic mode finds a repeated status code and a fixed sleep in Python", () =>
@@ -125,17 +124,17 @@ static List<Finding> Analyze(params (string Project, string File, string Code)[]
     var ctx = CSharpEngine.FromSources(sources.Select(s => new SourceInput { Path = s.File, RelativePath = s.Project + "/" + s.File, Project = s.Project, Text = s.Code }), refs, new Settings());
     var findings = CSharpEngine.Analyze(ctx);
     if (ctx.Warnings.Count > 0) throw new Exception(string.Join("; ", ctx.Warnings));
-    return findings;
+    return findings.ToList();
 }
 
-static Finding Single(List<Finding> f, string rule)
+static Finding Single(IReadOnlyList<Finding> f, string rule)
 {
     var hits = f.Where(x => x.RuleId == rule).ToList();
     if (hits.Count != 1) throw new Exception("expected one " + rule + ", got " + hits.Count + ". All: " + string.Join(", ", f.Select(x => x.RuleId + " " + x.Title)));
     return hits[0];
 }
 
-static void None(List<Finding> f, string rule)
+static void None(IReadOnlyList<Finding> f, string rule)
 {
     var hits = f.Where(x => x.RuleId == rule).ToList();
     if (hits.Count != 0) throw new Exception("expected no " + rule + ", got: " + string.Join(", ", hits.Select(x => x.Title)));

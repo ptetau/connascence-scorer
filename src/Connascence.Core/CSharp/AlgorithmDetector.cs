@@ -138,8 +138,7 @@ namespace Connascence.CSharp
                         loc = ctx.Locate(o.Body.Statements[o.Start], "copy");
                         endLine = o.Body.Statements[o.Start + o.Length - 1].GetLocation().GetLineSpan().EndLinePosition.Line + 1;
                     }
-                    loc.EndLine = endLine;
-                    locs.Add(loc);
+                    locs.Add(loc with { EndLine = endLine });
                 }
                 var first = occ[0];
                 var n = 0;

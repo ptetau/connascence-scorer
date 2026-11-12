@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace Connascence
 {
@@ -33,7 +35,7 @@ namespace Connascence
         public string File { get; init; } = "";      // path relative to the analysis root, forward slashes
         public int Line { get; init; }               // 1-based
         public int Column { get; init; }             // 1-based
-        public int EndLine { get; set; }             // 1-based, 0 if a single point
+        public int EndLine { get; init; }             // 1-based, 0 if a single point
         public string Project { get; init; } = "";   // project or top-level folder
         public string? Type { get; init; }           // containing type, or null
         public string? Member { get; init; }         // containing member, or null
@@ -51,28 +53,31 @@ namespace Connascence
     /// Carries the cause (why it was flagged), a suggestion (how to weaken it),
     /// and a change probe (the question a reviewer should ask before deciding).
     /// </summary>
-    /// <remarks>A class, not a record: the CLI updates a finding as it goes (priority, acceptance), and it is used as a set member, so it needs identity, not value equality.</remarks>
-    public sealed class Finding
+    /// <remarks>
+    /// Immutable: scoring, merging and the CLI make new findings with <c>with</c>. Equality is by identity, not value:
+    /// two findings with the same contents are still two findings (they are kept in sets and folded into each other).
+    /// </remarks>
+    public sealed record Finding
     {
         public string RuleId { get; init; } = "";
         public Kind Kind { get; init; }
         public string Title { get; init; } = "";
 
         /// <summary>Specific reason this was flagged, in plain words.</summary>
-        public string Cause { get; set; } = "";
+        public string Cause { get; init; } = "";
 
         /// <summary>Specific refactoring that would weaken the coupling or bring it closer together.</summary>
         public string Suggestion { get; init; } = "";
 
         /// <summary>The kind of future change that this coupling would make expensive.</summary>
-        public string ChangeProbe { get; set; } = "";
+        public string ChangeProbe { get; init; } = "";
 
-        public List<CodeLocation> Locations { get; set; } = new List<CodeLocation>();
+        public IReadOnlyList<CodeLocation> Locations { get; init; } = ImmutableArray<CodeLocation>.Empty;
 
         /// <summary>How many places must change together.</summary>
-        public int Degree { get; set; }
+        public int Degree { get; init; }
 
-        public Distance Distance { get; set; }
+        public Distance Distance { get; init; }
 
         /// <summary>Set by a detector when the other party is outside the code (e.g. another thread or service).</summary>
         public Distance? FixedDistance { get; init; }
@@ -81,30 +86,34 @@ namespace Connascence
         public string? GroupKey { get; init; }
 
         // Filled in by scoring.
-        public double Cost { get; set; }
-        public string Fingerprint { get; set; } = "";
+        public double Cost { get; init; }
+        public string Fingerprint { get; init; } = "";
 
         // Filled in by the CLI.
-        public int Volatility { get; set; }       // commits touching these files in the look-back window
-        public string? VolatilityLevel { get; set; }
-        public double Priority { get; set; }
-        public bool Accepted { get; set; }
-        public string? AcceptedReason { get; set; }
-        public bool InBaseline { get; set; }
+        public int Volatility { get; init; }       // commits touching these files in the look-back window
+        public string? VolatilityLevel { get; init; }
+        public double Priority { get; init; }
+        public bool Accepted { get; init; }
+        public string? AcceptedReason { get; init; }
+        public bool InBaseline { get; init; }
 
         /// <summary>Compared with the baseline: null (no baseline or unchanged), "new", or "grew from N to M places".</summary>
-        public string? Change { get; set; }
+        public string? Change { get; init; }
 
         /// <summary>Set when every place sits in an area the owner said is stable (from futures.json).</summary>
-        public string? StableReason { get; set; }
+        public string? StableReason { get; init; }
 
         /// <summary>Titles of smaller findings folded into this one because they only exist inside its copies.</summary>
-        public List<string> Subsumed { get; init; } = new List<string>();
+        public IReadOnlyList<string> Subsumed { get; init; } = ImmutableArray<string>.Empty;
 
         /// <summary>Ids of the likely futures (from futures.json) whose area this finding sits in.</summary>
-        public List<string> Futures { get; init; } = new List<string>();
+        public IReadOnlyList<string> Futures { get; init; } = ImmutableArray<string>.Empty;
 
         public CodeLocation? Primary => Locations.FirstOrDefault();
         public IEnumerable<string> Files => Locations.Select(l => l.File).Distinct();
+
+        public bool Equals(Finding? other) => ReferenceEquals(this, other);
+
+        public override int GetHashCode() => RuntimeHelpers.GetHashCode(this);
     }
 }

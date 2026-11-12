@@ -44,26 +44,21 @@ namespace Connascence.Generic
         static readonly Regex RubyGlobal = new Regex(@"(?<![\w])\$(?<name>[a-z_]\w*)\s*(?:=[^=]|\+=|-=|<<)");
         static readonly Regex Bool = new Regex(@"(?<![\w$=:])\s*(?<b>true|false|True|False)\s*$");
 
-        public static List<Finding> Analyze(IList<TextFile> files, Settings s)
+        public static IReadOnlyList<Finding> Analyze(IList<TextFile> files, Settings s)
         {
-            var findings = new List<Finding>();
             var defs = Definitions(files);
-            findings.AddRange(MagicValues(files, s));
-            findings.AddRange(BooleanFlags(files, defs));
-            findings.AddRange(LongParameterLists(files, defs, s));
-            findings.AddRange(DuplicateBlocks(files, s));
-            findings.AddRange(Sleeps(files));
-            findings.AddRange(Globals(files));
+            var findings = MagicValues(files, s)
+                .Concat(BooleanFlags(files, defs))
+                .Concat(LongParameterLists(files, defs, s))
+                .Concat(DuplicateBlocks(files, s))
+                .Concat(Sleeps(files))
+                .Concat(Globals(files))
+                .ToImmutableArray();
 
-            var byPath = files.ToDictionary(f => f.RelativePath, f => f.Lines);
+            var byPath = files.GroupBy(f => f.RelativePath).ToImmutableDictionary(g => g.Key, g => g.First().Lines);
             Func<string, string[]?> linesOf = p => byPath.TryGetValue(p, out var l) ? l : null;
-            foreach (var f in findings)
-            {
-                Scoring.Score(f, s);
-                var reason = InlineAcceptance.ReasonFor(linesOf, f);
-                if (reason != null) { f.Accepted = true; f.AcceptedReason = "inline: " + reason; }
-            }
-            return Scoring.Consolidate(findings).OrderByDescending(f => f.Cost).ToList();
+            var scored = findings.Select(f => CSharp.CSharpEngine.Accepting(Scoring.Score(f, s), linesOf)).ToImmutableArray();
+            return Scoring.Consolidate(scored).OrderByDescending(f => f.Cost).ToImmutableArray();
         }
 
         public static TextFile Load(string relativePath, string project, string text)
@@ -352,12 +347,8 @@ namespace Connascence.Generic
                     foreach (var o in distinct)
                         for (int j = o.Value; j <= o.Value + len - k; j++) covered.Add(o.Key.RelativePath + "#" + j);
 
-                    var locs = distinct.Select(o =>
-                    {
-                        var l = Loc(o.Key, norm[o.Key][o.Value].Key, "copy");
-                        l.EndLine = norm[o.Key][o.Value + len - 1].Key + 1;
-                        return l;
-                    }).ToList();
+                    var locs = distinct.Select(o => Loc(o.Key, norm[o.Key][o.Value].Key, "copy") with { EndLine = norm[o.Key][o.Value + len - 1].Key + 1 })
+                        .ToList();
                     yield return new Finding
                     {
                         RuleId = "GNA01",

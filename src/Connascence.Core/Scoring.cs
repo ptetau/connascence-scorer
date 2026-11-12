@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
@@ -54,13 +55,18 @@ namespace Connascence
             return Distance.SameProject;
         }
 
-        /// <summary>Fills Distance (if not set by the detector), Degree, Cost and Fingerprint.</summary>
-        public static void Score(Finding f, Settings s)
+        /// <summary>The finding with Distance (if not set by the detector), Degree, Cost and Fingerprint filled in.</summary>
+        public static Finding Score(Finding f, Settings s)
         {
-            if (f.Degree <= 0) f.Degree = Math.Max(1, f.Locations.Count);
-            f.Distance = f.FixedDistance ?? DistanceOf(f.Locations);
-            f.Cost = Math.Round(s.StrengthOf(f.Kind) * Math.Pow(f.Degree, s.DegreeExponent) * s.WeightOf(f.Distance), 2);
-            f.Fingerprint = FingerprintOf(f);
+            var degree = f.Degree <= 0 ? Math.Max(1, f.Locations.Count) : f.Degree;
+            var distance = f.FixedDistance ?? DistanceOf(f.Locations);
+            var scored = f with
+            {
+                Degree = degree,
+                Distance = distance,
+                Cost = Math.Round(s.StrengthOf(f.Kind) * Math.Pow(degree, s.DegreeExponent) * s.WeightOf(distance), 2),
+            };
+            return scored with { Fingerprint = FingerprintOf(scored) };
         }
 
         /// <summary>
@@ -88,28 +94,45 @@ namespace Connascence
         /// </summary>
         public static IReadOnlyList<Finding> Consolidate(IReadOnlyList<Finding> findings)
         {
-            foreach (var f in findings)
-                f.Locations = f.Locations.GroupBy(l => l.File + ":" + l.Line + ":" + l.Role).Select(g => g.First()).ToList();
+            var deduped = findings
+                .Select(f => f with { Locations = f.Locations.GroupBy(l => l.File + ":" + l.Line + ":" + l.Role).Select(g => g.First()).ToImmutableArray() })
+                .ToImmutableArray();
+            var copies = deduped.Where(f => f.Kind == Kind.Algorithm && f.Locations.All(l => l.EndLine > 0)).ToImmutableArray();
+            if (copies.IsEmpty) return deduped;
 
-            var copies = findings.Where(f => f.Kind == Kind.Algorithm && f.Locations.All(l => l.EndLine > 0)).ToList();
-            if (copies.Count == 0) return findings;
-            var removed = new HashSet<Finding>();
-            foreach (var f in findings)
+            // Each other finding that lies inside two or more regions of a copy belongs to the first such copy.
+            var owners = deduped.Where(f => !copies.Contains(f))
+                .Select(f => (Finding: f, Copy: copies.FirstOrDefault(c => LiesInside(f, c))))
+                .Where(x => x.Copy != null)
+                .ToImmutableArray();
+            var folded = owners.Select(x => x.Finding).ToImmutableHashSet();
+            return deduped.Where(f => !folded.Contains(f))
+                .Select(f => copies.Contains(f) ? Absorb(f, owners.Where(x => x.Copy == f).Select(x => x.Finding).ToImmutableArray()) : f)
+                .ToImmutableArray();
+        }
+
+        /// <summary>True when the finding's places fall inside the copy's regions, in at least two different copies.</summary>
+        static bool LiesInside(Finding f, Finding copy)
+        {
+            var regions = f.Locations.Select(l => RegionOf(copy, l)).ToImmutableArray();
+            return !regions.Any(i => i < 0) && regions.Distinct().Count() >= 2;
+        }
+
+        static int RegionOf(Finding copy, CodeLocation l) =>
+            copy.Locations.Select((r, i) => (r, i)).Where(x => x.r.File == l.File && l.Line >= x.r.Line && l.Line <= x.r.EndLine)
+                .Select(x => x.i).DefaultIfEmpty(-1).First();
+
+        /// <summary>The copy, with the findings it contains listed under it and their cost added to it.</summary>
+        static Finding Absorb(Finding copy, ImmutableArray<Finding> contained)
+        {
+            if (contained.IsEmpty) return copy;
+            var subsumed = copy.Subsumed.Concat(contained.Select(f => f.Title)).ToImmutableArray();
+            return copy with
             {
-                if (copies.Contains(f)) continue;
-                foreach (var c in copies)
-                {
-                    var regions = f.Locations.Select(l => c.Locations.FindIndex(r => r.File == l.File && l.Line >= r.Line && l.Line <= r.EndLine)).ToList();
-                    if (regions.Any(i => i < 0) || regions.Distinct().Count() < 2) continue;
-                    removed.Add(f);
-                    c.Cost = Math.Round(c.Cost + f.Cost, 2);
-                    c.Subsumed.Add(f.Title);
-                    break;
-                }
-            }
-            foreach (var c in copies.Where(c => c.Subsumed.Count > 0))
-                c.Cause += " The copies also repeat: " + Text.Join(c.Subsumed.Distinct().ToList()) + ". Fixing the copy fixes those too.";
-            return findings.Where(f => !removed.Contains(f)).ToList();
+                Cost = contained.Aggregate(copy.Cost, (cost, f) => Math.Round(cost + f.Cost, 2)),
+                Subsumed = subsumed,
+                Cause = copy.Cause + " The copies also repeat: " + Text.Join(subsumed.Distinct().ToImmutableArray()) + ". Fixing the copy fixes those too.",
+            };
         }
 
         public static ScoreSummary Summarise(IReadOnlyList<Finding> findings, int lines, int files, Settings s)

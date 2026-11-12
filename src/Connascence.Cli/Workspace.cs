@@ -95,12 +95,12 @@ namespace Connascence.Cli
                 result.Warnings.AddRange(ctx.Warnings);
             }
             if (generic.Count > 0) result.Findings.AddRange(GenericEngine.Analyze(generic, settings));
-            if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings);
+            if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings).ToList();
             result.CSharpFiles = csharp.Count;
             result.GenericFiles = generic.Count;
 
             var store = new Store(root);
-            store.Apply(result.Findings);
+            result.Findings = store.Apply(result.Findings);
             result.Futures = store.Futures().Futures;
 
             var git = useGit && config.Volatility.Enabled ? Git.Open(root) : null;
@@ -109,32 +109,25 @@ namespace Connascence.Cli
                 result.Commit = git.Head();
                 var churn = Git.Churn(git.Commits(config.Volatility.Months));
                 result.VolatilityUsed = churn.Count > 0;
-                foreach (var f in result.Findings)
-                {
-                    int max = 0, n;
-                    foreach (var file in f.Files) if (churn.TryGetValue(file, out n) && n > max) max = n;
-                    f.Volatility = max;
-                }
+                result.Findings = result.Findings
+                    .Select(f => f with { Volatility = f.Files.Select(file => churn.TryGetValue(file, out var n) ? n : 0).DefaultIfEmpty(0).Max() })
+                    .ToList();
             }
 
             var likelihood = result.Futures.ToDictionary(x => x.Id ?? "", x => (x.Likelihood ?? "medium").ToLowerInvariant());
-            foreach (var f in result.Findings)
+            result.Findings = result.Findings.Select(f =>
             {
-                f.VolatilityLevel = !result.VolatilityUsed ? null
+                var level = !result.VolatilityUsed ? null
                     : f.Volatility >= config.Volatility.High ? "high"
                     : f.Volatility >= config.Volatility.Medium ? "medium" : "low";
-                double vBoost = f.VolatilityLevel == "high" ? 1.0 : f.VolatilityLevel == "medium" ? 0.5 : 0;
-                double futureBoost = 1;
-                foreach (var id in f.Futures)
-                {
-                    string l;
-                    likelihood.TryGetValue(id, out l);
-                    var b = l == "high" ? 2.0 : l == "low" ? 1.2 : 1.5;
-                    if (b > futureBoost) futureBoost = b;
-                }
+                double vBoost = level == "high" ? 1.0 : level == "medium" ? 0.5 : 0;
+                double futureBoost = f.Futures
+                    .Select(id => likelihood.TryGetValue(id, out var l) ? l : null)
+                    .Select(l => l == "high" ? 2.0 : l == "low" ? 1.2 : 1.5)
+                    .Append(1.0).Max();
                 var stableFactor = f.StableReason != null && f.Futures.Count == 0 ? 0.25 : 1.0;
-                f.Priority = Math.Round(f.Cost * (1 + vBoost) * futureBoost * stableFactor, 1);
-            }
+                return f with { VolatilityLevel = level, Priority = Math.Round(f.Cost * (1 + vBoost) * futureBoost * stableFactor, 1) };
+            }).ToList();
 
             result.Findings = result.Findings.OrderByDescending(f => f.Priority).ThenByDescending(f => f.Cost).ToList();
             result.Summary = Scoring.Summarise(result.Findings, lines, result.Files.Count, settings);
