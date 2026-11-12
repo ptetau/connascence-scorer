@@ -57,9 +57,9 @@ namespace Connascence.CSharp
                         bool evidence = guards.Count > 0 || flags.Count > 0;
                         if (!evidence && external.Count < 2) continue;
 
-                        var locs = new List<CodeLocation> { ctx.Locate(init.Identifier, "setup method") };
-                        locs.AddRange(guards.Take(5).Select(g => ctx.Locate(g, "runtime guard")));
-                        locs.AddRange(external.Select(c => ctx.Locate(c.Node, "caller")));
+                        var locs = new List<CodeLocation> { ctx.Locate(init.Identifier, Roles.SetupMethod) };
+                        locs.AddRange(guards.Take(5).Select(g => ctx.Locate(g, Roles.RuntimeGuard)));
+                        locs.AddRange(external.Select(c => ctx.Locate(c.Node, Roles.Caller)));
                         var otherNames = Text.Join(others.Select(o => o.Identifier.Text + "()").Distinct().Take(3).ToList());
                         var degree = System.Math.Max(1, external.Count);
                         yield return new Finding
@@ -112,7 +112,7 @@ namespace Connascence.CSharp
                     var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.ToString() ?? "";
                     if (arg == "0" || arg.Contains("Infinite")) continue;
 
-                    var loc = ctx.Locate(inv, "wait");
+                    var loc = ctx.Locate(inv, Roles.Wait);
                     var inLoop = inv.Ancestors().Any(a => a is WhileStatementSyntax || a is ForStatementSyntax || a is DoStatementSyntax || a is ForEachStatementSyntax);
                     yield return new Finding
                     {

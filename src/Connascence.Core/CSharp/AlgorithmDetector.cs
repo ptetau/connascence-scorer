@@ -131,12 +131,12 @@ namespace Connascence.CSharp
                     var parent = o.Body.Block.Parent;
                     if (o.Start == 0 && o.Length == o.Body.Statements.Count)
                     {
-                        loc = ctx.Locate(parent is BaseMethodDeclarationSyntax || parent is LocalFunctionStatementSyntax ? parent.GetFirstToken() : o.Body.Block.GetFirstToken(), "copy");
+                        loc = ctx.Locate(parent is BaseMethodDeclarationSyntax || parent is LocalFunctionStatementSyntax ? parent.GetFirstToken() : o.Body.Block.GetFirstToken(), Roles.Copy);
                         endLine = o.Body.Block.GetLocation().GetLineSpan().EndLinePosition.Line + 1;
                     }
                     else
                     {
-                        loc = ctx.Locate(o.Body.Statements[o.Start], "copy");
+                        loc = ctx.Locate(o.Body.Statements[o.Start], Roles.Copy);
                         endLine = o.Body.Statements[o.Start + o.Length - 1].GetLocation().GetLineSpan().EndLinePosition.Line + 1;
                     }
                     loc.EndLine = endLine;
@@ -276,7 +276,7 @@ namespace Connascence.CSharp
             foreach (var kv in groups.Where(g => g.Value.Count >= 2))
             {
                 var lits = kv.Value;
-                var locs = lits.Select(l => ctx.Locate(l, "use")).ToList();
+                var locs = lits.Select(l => ctx.Locate(l, Roles.Use)).ToList();
                 if (locs.Select(l => l.Anchor).Distinct().Count() < 2) continue;
                 var isPattern = kv.Key.StartsWith("pattern|");
                 var what = (isPattern ? "regex pattern " : "format ") + "\"" + Text.Quote(lits[0].Token.ValueText) + "\"";
@@ -326,7 +326,7 @@ namespace Connascence.CSharp
 
             foreach (var kv in groups)
             {
-                var locs = kv.Value.Select(n => ctx.Locate(n, "use")).GroupBy(l => l.Anchor).Select(g => g.First()).ToList();
+                var locs = kv.Value.Select(n => ctx.Locate(n, Roles.Use)).GroupBy(l => l.Anchor).Select(g => g.First()).ToList();
                 if (locs.Select(l => l.Type).Distinct().Count() < 2) continue;
                 yield return new Finding
                 {

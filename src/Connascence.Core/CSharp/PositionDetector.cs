@@ -39,8 +39,8 @@ namespace Connascence.CSharp
                     if (positional.Count == 0) continue;
 
                     var name = decl is ConstructorDeclarationSyntax cd ? "new " + cd.Identifier.Text : symbol.Name;
-                    var locs = new List<CodeLocation> { ctx.Locate(decl.ParameterList, "declaration") };
-                    locs.AddRange(positional.Select(c => ctx.Locate(c.Node, "call site")));
+                    var locs = new List<CodeLocation> { ctx.Locate(decl.ParameterList, Roles.Declaration) };
+                    locs.AddRange(positional.Select(c => ctx.Locate(c.Node, Roles.CallSite)));
                     var typeName = sameType.Key;
                     var sameNames = string.Join(", ", sameType.Select(p => p.Identifier.Text).ToArray());
 
@@ -92,8 +92,8 @@ namespace Connascence.CSharp
                     var calls = ctx.CallsTo(symbol);
                     if (calls.Count == 0) continue;
 
-                    var locs = new List<CodeLocation> { ctx.Locate(decl.ReturnType, "declaration") };
-                    locs.AddRange(calls.Select(c => ctx.Locate(c.Node, "call site")));
+                    var locs = new List<CodeLocation> { ctx.Locate(decl.ReturnType, Roles.Declaration) };
+                    locs.AddRange(calls.Select(c => ctx.Locate(c.Node, Roles.CallSite)));
                     yield return new Finding
                     {
                         RuleId = "CNP02",
@@ -139,7 +139,7 @@ namespace Connascence.CSharp
                 {
                     var uses = kv.Value;
                     var indices = uses.Select(u => u.ArgumentList.Arguments[0].ToString()).Distinct().ToList();
-                    var locs = uses.Select(u => ctx.Locate(u, "use")).ToList();
+                    var locs = uses.Select(u => ctx.Locate(u, Roles.Use)).ToList();
                     var expr = uses[0].Expression.ToString();
                     if (expr.Length > 40) expr = expr.Substring(0, 37) + "...";
                     yield return new Finding
