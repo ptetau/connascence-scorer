@@ -39,7 +39,7 @@ def find_cli(explicit):
         return shlex.split(explicit)
     if os.environ.get("CONNASCENCE_CLI"):
         return shlex.split(os.environ["CONNASCENCE_CLI"])
-    dlls = sorted(glob.glob(os.path.join(REPO, "src", "Connascence.Cli", "bin", "*", "net8.0", "connascence.dll")),
+    dlls = sorted(glob.glob(os.path.join(REPO, "src", "Connascence.Cli", "bin", "*", "net11.0", "connascence.dll")),
                   key=os.path.getmtime, reverse=True)
     if dlls:
         return ["dotnet", dlls[0]]

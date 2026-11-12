@@ -9,7 +9,7 @@ namespace Connascence.CSharp
     /// <summary>Runs every C# detector over a compilation and scores the results.</summary>
     public static class CSharpEngine
     {
-        public static IList<ICSharpDetector> Detectors() => new List<ICSharpDetector>
+        public static IReadOnlyList<ICSharpDetector> Detectors() => new List<ICSharpDetector>
         {
             new MeaningDetector(),
             new PositionDetector(),
@@ -28,7 +28,7 @@ namespace Connascence.CSharp
             }
 
             var lines = ctx.Files.ToDictionary(f => f.RelativePath, f => f.Tree.GetText().Lines.Select(l => l.ToString()).ToArray());
-            Func<string, string[]> linesOf = p => { string[] l; return lines.TryGetValue(p, out l) ? l : null; };
+            Func<string, string[]?> linesOf = p => lines.TryGetValue(p, out var l) ? l : null;
 
             foreach (var f in findings)
             {
@@ -42,7 +42,7 @@ namespace Connascence.CSharp
         }
 
         /// <summary>Builds one compilation from all files so calls across projects resolve.</summary>
-        public static CSharpContext FromSources(IEnumerable<SourceInput> inputs, IEnumerable<MetadataReference> references, Settings settings)
+        public static CSharpContext FromSources(IEnumerable<SourceInput> inputs, IEnumerable<MetadataReference> references, Settings? settings)
         {
             var options = new CSharpParseOptions(LanguageVersion.Latest);
             var files = inputs.Select(i => new SourceFile
@@ -65,8 +65,8 @@ namespace Connascence.CSharp
                 var line = raw.Trim();
                 if (line.Length == 0) continue;
                 if (inBlock) { if (line.Contains("*/")) inBlock = false; continue; }
-                if (line.StartsWith("//")) continue;
-                if (line.StartsWith("/*")) { if (!line.Contains("*/")) inBlock = true; continue; }
+                if (line.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (line.StartsWith("/*", StringComparison.Ordinal)) { if (!line.Contains("*/")) inBlock = true; continue; }
                 if (line == "{" || line == "}") continue;
                 n++;
             }
@@ -74,11 +74,11 @@ namespace Connascence.CSharp
         }
     }
 
-    public sealed class SourceInput
+    public sealed record SourceInput
     {
-        public string Path { get; set; }
-        public string RelativePath { get; set; }
-        public string Project { get; set; }
-        public string Text { get; set; }
+        public required string Path { get; init; }
+        public required string RelativePath { get; init; }
+        public required string Project { get; init; }
+        public required string Text { get; init; }
     }
 }

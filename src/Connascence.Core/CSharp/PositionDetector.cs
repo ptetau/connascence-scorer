@@ -11,7 +11,7 @@ namespace Connascence.CSharp
     /// CNP02: tuples that callers must unpack by position.
     /// CNP03: picking fields out of a split string by index.
     /// </summary>
-    public sealed class PositionDetector : ICSharpDetector
+    public sealed record PositionDetector : ICSharpDetector
     {
         public IEnumerable<Finding> Detect(CSharpContext ctx)
         {
@@ -28,7 +28,7 @@ namespace Connascence.CSharp
                     var ps = decl.ParameterList?.Parameters;
                     if (ps == null || ps.Value.Count < s.MinParametersForPosition) continue;
                     var sameType = ps.Value.Where(p => p.Type != null)
-                        .GroupBy(p => p.Type.ToString()).OrderByDescending(g => g.Count()).FirstOrDefault();
+                        .GroupBy(p => p.Type!.ToString()).OrderByDescending(g => g.Count()).FirstOrDefault();
                     if (sameType == null || sameType.Count() < s.MinSameTypeParameters) continue;
 
                     var symbol = ctx.Model(decl.SyntaxTree).GetDeclaredSymbol(decl) as IMethodSymbol;
@@ -39,7 +39,7 @@ namespace Connascence.CSharp
                     if (positional.Count == 0) continue;
 
                     var name = decl is ConstructorDeclarationSyntax cd ? "new " + cd.Identifier.Text : symbol.Name;
-                    var locs = new List<CodeLocation> { ctx.Locate(decl.ParameterList, "declaration") };
+                    var locs = new List<CodeLocation> { ctx.Locate(decl.ParameterList!, "declaration") };
                     locs.AddRange(positional.Select(c => ctx.Locate(c.Node, "call site")));
                     var typeName = sameType.Key;
                     var sameNames = string.Join(", ", sameType.Select(p => p.Identifier.Text).ToArray());
@@ -130,8 +130,7 @@ namespace Connascence.CSharp
                         if (!IsLocalFromSplit(ea)) continue;
                     }
                     var key = CSharpContext.TypeNameOf(ea) + "." + CSharpContext.MemberNameOf(ea) + "|" + ea.Expression.ToString();
-                    List<ElementAccessExpressionSyntax> list;
-                    if (!groups.TryGetValue(key, out list)) { list = new List<ElementAccessExpressionSyntax>(); groups[key] = list; }
+                    if (!groups.TryGetValue(key, out var list)) { list = new List<ElementAccessExpressionSyntax>(); groups[key] = list; }
                     list.Add(ea);
                 }
 

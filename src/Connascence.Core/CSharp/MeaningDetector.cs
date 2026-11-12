@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Globalization;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -11,17 +13,17 @@ namespace Connascence.CSharp
     /// CNM01 / CNV02: literal values whose meaning (or limit) several places must agree on.
     /// CNM02: bare true/false arguments that the caller must decode.
     /// </summary>
-    public sealed class MeaningDetector : ICSharpDetector
+    public sealed record MeaningDetector : ICSharpDetector
     {
         enum Use { Equality, Relational, Switch, Assignment, Argument, Indexer }
 
-        sealed class Hit
+        sealed record Hit
         {
-            public LiteralExpressionSyntax Literal;
-            public string Subject;
-            public Use Use;
-            public string Owner;   // type that declares the subject, e.g. Order for order.Status
-            public List<Hit> Hits; // the whole group, set on the first hit
+            public required LiteralExpressionSyntax Literal { get; init; }
+            public required string Subject { get; init; }
+            public Use Use { get; init; }
+            public string? Owner { get; init; }   // type that declares the subject, e.g. Order for order.Status
+            public IReadOnlyList<Hit>? Hits;      // the whole group, set on the first hit
         }
 
         public IEnumerable<Finding> Detect(CSharpContext ctx)
@@ -35,7 +37,7 @@ namespace Connascence.CSharp
         {
             var s = ctx.Settings;
             var ignored = new HashSet<string>(s.IgnoredNumbers);
-            var codeLike = new HashSet<string>(s.CodeLikeNames);
+            var codeLike = s.CodeLikeNames.ToImmutableHashSet();
             var groups = new Dictionary<string, List<Hit>>();
 
             foreach (var root in ctx.Roots)
@@ -62,8 +64,7 @@ namespace Connascence.CSharp
                     var kindTag = isNumber && hit.Use == Use.Relational ? "limit" : (isNumber ? "num" : "str");
                     var subjectKey = hit.Use == Use.Indexer ? "[]" : hit.Subject.ToLowerInvariant();
                     var key = kindTag + "|" + value + "|" + subjectKey;
-                    List<Hit> list;
-                    if (!groups.TryGetValue(key, out list)) { list = new List<Hit>(); groups[key] = list; }
+                    if (!groups.TryGetValue(key, out var list)) { list = new List<Hit>(); groups[key] = list; }
                     list.Add(hit);
                 }
             }
@@ -74,7 +75,7 @@ namespace Connascence.CSharp
                 var first = hits[0];
                 first.Hits = hits;
                 bool isString = first.Literal.IsKind(SyntaxKind.StringLiteralExpression);
-                bool isLimit = kv.Key.StartsWith("limit|");
+                bool isLimit = kv.Key.StartsWith("limit|", StringComparison.Ordinal);
                 bool codeSubject = IsCodeLike(first.Subject, codeLike);
                 if (hits.Count < 2 && !(codeSubject && !isLimit)) continue;
                 if (hits.Count < 2 && first.Literal.IsKind(SyntaxKind.NumericLiteralExpression) && ignored.Contains(NumberText(first.Literal))) continue;
@@ -138,7 +139,7 @@ namespace Connascence.CSharp
             }
         }
 
-        static bool IsCodeLike(string subject, HashSet<string> codeLike)
+        static bool IsCodeLike(string subject, ImmutableHashSet<string> codeLike)
         {
             if (string.IsNullOrEmpty(subject)) return false;
             var words = Text.Words(subject);
@@ -151,7 +152,7 @@ namespace Connascence.CSharp
             string text = v is double d ? d.ToString(CultureInfo.InvariantCulture)
                         : v is float f ? f.ToString(CultureInfo.InvariantCulture)
                         : v is decimal m ? m.ToString(CultureInfo.InvariantCulture)
-                        : System.Convert.ToString(v, CultureInfo.InvariantCulture);
+                        : System.Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
             if (lit.Parent is PrefixUnaryExpressionSyntax p && p.IsKind(SyntaxKind.UnaryMinusExpression)) text = "-" + text;
             return text;
         }
@@ -177,7 +178,7 @@ namespace Connascence.CSharp
             return false;
         }
 
-        static Hit Classify(CSharpContext ctx, LiteralExpressionSyntax lit)
+        static Hit? Classify(CSharpContext ctx, LiteralExpressionSyntax lit)
         {
             SyntaxNode node = lit;
             if (node.Parent is PrefixUnaryExpressionSyntax) node = node.Parent;
@@ -228,7 +229,7 @@ namespace Connascence.CSharp
             return null;
         }
 
-        static string OwnerOf(CSharpContext ctx, ExpressionSyntax e)
+        static string? OwnerOf(CSharpContext ctx, ExpressionSyntax e)
         {
             var s = ctx.SymbolOf(e);
             return (s is IPropertySymbol || s is IFieldSymbol) ? s.ContainingType?.Name : null;
@@ -238,7 +239,7 @@ namespace Connascence.CSharp
         {
             var subject = Text.PascalCase(h.Subject);
             var owner = h.Hits?.Select(x => x.Owner).FirstOrDefault(o => o != null);
-            return owner != null && !subject.StartsWith(owner) ? owner + subject : subject;
+            return owner != null && !subject.StartsWith(owner, StringComparison.Ordinal) ? owner + subject : subject;
         }
 
         static bool IsComparison(SyntaxKind k) =>
@@ -246,7 +247,7 @@ namespace Connascence.CSharp
             k == SyntaxKind.LessThanExpression || k == SyntaxKind.LessThanOrEqualExpression ||
             k == SyntaxKind.GreaterThanExpression || k == SyntaxKind.GreaterThanOrEqualExpression;
 
-        static string SwitchSubject(SyntaxNode pattern)
+        static string? SwitchSubject(SyntaxNode pattern)
         {
             foreach (var a in pattern.Ancestors())
             {
@@ -259,7 +260,7 @@ namespace Connascence.CSharp
         }
 
         /// <summary>The name a value is compared with: x, obj.Status, GetStatus() all give the last identifier.</summary>
-        public static string NameOf(ExpressionSyntax e)
+        public static string? NameOf(ExpressionSyntax? e)
         {
             switch (e)
             {
@@ -276,7 +277,7 @@ namespace Connascence.CSharp
             return null;
         }
 
-        static string ParameterName(CSharpContext ctx, ArgumentSyntax arg)
+        static string? ParameterName(CSharpContext ctx, ArgumentSyntax arg)
         {
             if (arg.NameColon != null) return arg.NameColon.Name.Identifier.Text;
             var list = arg.Parent as ArgumentListSyntax;

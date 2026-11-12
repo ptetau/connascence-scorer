@@ -8,29 +8,29 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Connascence.CSharp
 {
     /// <summary>A C# file taking part in the analysis.</summary>
-    public sealed class SourceFile
+    public sealed record SourceFile
     {
-        public SyntaxTree Tree { get; set; }
-        public string RelativePath { get; set; }
-        public string Project { get; set; }
+        public required SyntaxTree Tree { get; init; }
+        public required string RelativePath { get; init; }
+        public required string Project { get; init; }
     }
 
     /// <summary>A call to a method or constructor declared in the analysed source.</summary>
-    public sealed class CallSite
+    public sealed record CallSite
     {
-        public SyntaxNode Node { get; set; }
-        public ArgumentListSyntax Args { get; set; }
-        public IMethodSymbol Target { get; set; }
+        public required SyntaxNode Node { get; init; }
+        public required ArgumentListSyntax Args { get; init; }
+        public required IMethodSymbol Target { get; init; }
     }
 
     /// <summary>Everything a detector needs: syntax, semantics, settings and helpers to describe locations.</summary>
     public sealed class CSharpContext
     {
-        readonly Dictionary<SyntaxTree, SourceFile> _files;
+        readonly IReadOnlyDictionary<SyntaxTree, SourceFile> _files;
         readonly Dictionary<SyntaxTree, SemanticModel> _models = new Dictionary<SyntaxTree, SemanticModel>();
-        Dictionary<IMethodSymbol, List<CallSite>> _calls;
+        Dictionary<IMethodSymbol, List<CallSite>>? _calls;
 
-        public CSharpContext(Compilation compilation, IEnumerable<SourceFile> files, Settings settings)
+        public CSharpContext(Compilation compilation, IEnumerable<SourceFile> files, Settings? settings)
         {
             Compilation = compilation;
             Files = files.ToList();
@@ -47,8 +47,7 @@ namespace Connascence.CSharp
 
         public SemanticModel Model(SyntaxTree tree)
         {
-            SemanticModel m;
-            if (!_models.TryGetValue(tree, out m))
+            if (!_models.TryGetValue(tree, out var m))
             {
                 m = Compilation.GetSemanticModel(tree);
                 _models[tree] = m;
@@ -56,30 +55,29 @@ namespace Connascence.CSharp
             return m;
         }
 
-        public SourceFile FileOf(SyntaxTree tree)
+        public SourceFile? FileOf(SyntaxTree? tree)
         {
-            SourceFile f;
-            return _files.TryGetValue(tree, out f) ? f : null;
+            return tree != null && _files.TryGetValue(tree, out var f) ? f : null;
         }
 
         /// <summary>Resolves a symbol even when overload resolution fails because references are missing.</summary>
-        public ISymbol SymbolOf(SyntaxNode node)
+        public ISymbol? SymbolOf(SyntaxNode? node)
         {
             if (node == null || FileOf(node.SyntaxTree) == null) return null;
             var info = Model(node.SyntaxTree).GetSymbolInfo(node);
             return info.Symbol ?? info.CandidateSymbols.FirstOrDefault();
         }
 
-        public ITypeSymbol TypeOf(ExpressionSyntax expr)
+        public ITypeSymbol? TypeOf(ExpressionSyntax? expr)
         {
             if (expr == null || FileOf(expr.SyntaxTree) == null) return null;
             return Model(expr.SyntaxTree).GetTypeInfo(expr).Type;
         }
 
-        public static bool IsInSource(ISymbol s) => s != null && s.Locations.Any(l => l.IsInSource);
+        public static bool IsInSource(ISymbol? s) => s != null && s.Locations.Any(l => l.IsInSource);
 
         /// <summary>All calls to source-declared methods and constructors, keyed by the original definition.</summary>
-        public Dictionary<IMethodSymbol, List<CallSite>> Calls
+        public IReadOnlyDictionary<IMethodSymbol, List<CallSite>> Calls
         {
             get
             {
@@ -89,7 +87,7 @@ namespace Connascence.CSharp
                 {
                     foreach (var node in root.DescendantNodes())
                     {
-                        ArgumentListSyntax args = null;
+                        ArgumentListSyntax? args = null;
                         if (node is InvocationExpressionSyntax inv) args = inv.ArgumentList;
                         else if (node is BaseObjectCreationExpressionSyntax oc) args = oc.ArgumentList;
                         else if (node is ConstructorInitializerSyntax ci) args = ci.ArgumentList;
@@ -102,8 +100,7 @@ namespace Connascence.CSharp
                         sym = sym.OriginalDefinition;
                         if (!IsInSource(sym)) continue;
 
-                        List<CallSite> list;
-                        if (!_calls.TryGetValue(sym, out list)) { list = new List<CallSite>(); _calls[sym] = list; }
+                        if (!_calls.TryGetValue(sym, out var list)) { list = new List<CallSite>(); _calls[sym] = list; }
                         list.Add(new CallSite { Node = node, Args = args, Target = sym });
                     }
                 }
@@ -111,10 +108,9 @@ namespace Connascence.CSharp
             }
         }
 
-        public List<CallSite> CallsTo(IMethodSymbol m)
+        public IReadOnlyList<CallSite> CallsTo(IMethodSymbol? m)
         {
-            List<CallSite> list;
-            return m != null && Calls.TryGetValue(m.OriginalDefinition, out list) ? list : new List<CallSite>();
+            return m != null && Calls.TryGetValue(m.OriginalDefinition, out var list) ? list : new List<CallSite>();
         }
 
         // ---------- Describing locations ----------
@@ -126,10 +122,10 @@ namespace Connascence.CSharp
 
         public CodeLocation Locate(SyntaxToken token, string role)
         {
-            return Locate(token.SyntaxTree, token.Span, token.Parent, role);
+            return Locate(token.SyntaxTree!, token.Span, token.Parent, role);
         }
 
-        CodeLocation Locate(SyntaxTree tree, Microsoft.CodeAnalysis.Text.TextSpan span, SyntaxNode node, string role)
+        CodeLocation Locate(SyntaxTree tree, Microsoft.CodeAnalysis.Text.TextSpan span, SyntaxNode? node, string role)
         {
             var file = FileOf(tree);
             var pos = tree.GetLineSpan(span).StartLinePosition;
@@ -149,7 +145,7 @@ namespace Connascence.CSharp
             };
         }
 
-        public static string TypeNameOf(SyntaxNode node)
+        public static string? TypeNameOf(SyntaxNode? node)
         {
             var names = node?.AncestorsAndSelf().OfType<BaseTypeDeclarationSyntax>().Select(t => t.Identifier.Text).Reverse().ToList();
             if (names == null || names.Count == 0)
@@ -157,7 +153,7 @@ namespace Connascence.CSharp
             return string.Join(".", names.ToArray());
         }
 
-        public static string MemberNameOf(SyntaxNode node)
+        public static string? MemberNameOf(SyntaxNode? node)
         {
             if (node == null) return null;
             foreach (var a in node.AncestorsAndSelf())

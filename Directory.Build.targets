@@ -18,7 +18,7 @@
   <!-- Offline builds of the netstandard analyzer also need the immutable collections that Roslyn uses. -->
   <ItemGroup Condition="'$(NeedsRoslyn)' == 'true' and '$(UseSdkRoslyn)' == 'true' and $(TargetFramework.StartsWith('netstandard'))">
     <Reference Include="System.Collections.Immutable">
-      <HintPath>$([System.IO.Directory]::GetDirectories('$(NetCoreRoot)packs/Microsoft.NETCore.App.Ref')[0])/ref/net8.0/System.Collections.Immutable.dll</HintPath>
+      <HintPath>$(NetCoreRoot)packs/Microsoft.NETCore.App.Ref/$(BundledNETCoreAppPackageVersion)/ref/net$(BundledNETCoreAppTargetFrameworkVersion)/System.Collections.Immutable.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

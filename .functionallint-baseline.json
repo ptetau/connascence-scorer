@@ -1,0 +1,88 @@
+{
+  "src/Connascence.Core/CSharp/AlgorithmDetector.cs": {
+    "FP0001": 25,
+    "FP0002": 6,
+    "FP0004": 1,
+    "FP0005": 20,
+    "FP0008": 1
+  },
+  "src/Connascence.Core/CSharp/CSharpContext.cs": {
+    "FP0001": 3,
+    "FP0002": 4,
+    "FP0003": 1,
+    "FP0004": 1,
+    "FP0005": 8,
+    "FP0008": 4,
+    "FP0015": 1
+  },
+  "src/Connascence.Core/CSharp/CSharpEngine.cs": {
+    "FP0001": 3,
+    "FP0005": 6,
+    "FP0008": 1,
+    "FP0015": 1
+  },
+  "src/Connascence.Core/CSharp/ExecutionDetector.cs": {
+    "FP0001": 6,
+    "FP0004": 1,
+    "FP0005": 9
+  },
+  "src/Connascence.Core/CSharp/MeaningDetector.cs": {
+    "FP0001": 9,
+    "FP0002": 3,
+    "FP0003": 1,
+    "FP0005": 7
+  },
+  "src/Connascence.Core/CSharp/PositionDetector.cs": {
+    "FP0001": 7,
+    "FP0005": 7
+  },
+  "src/Connascence.Core/CSharp/StateDetector.cs": {
+    "FP0001": 11,
+    "FP0002": 1,
+    "FP0004": 1,
+    "FP0005": 15,
+    "FP0015": 1
+  },
+  "src/Connascence.Core/Catalog.cs": {
+    "FP0001": 1,
+    "FP0005": 1
+  },
+  "src/Connascence.Core/CrossLanguage.cs": {
+    "FP0001": 2,
+    "FP0002": 1,
+    "FP0005": 7,
+    "FP0008": 1
+  },
+  "src/Connascence.Core/Generic/GenericEngine.cs": {
+    "FP0001": 32,
+    "FP0002": 3,
+    "FP0005": 32,
+    "FP0008": 13,
+    "FP0014": 1,
+    "FP0015": 11
+  },
+  "src/Connascence.Core/Model.cs": {
+    "FP0003": 16,
+    "FP0004": 1,
+    "FP0005": 3,
+    "FP0008": 3
+  },
+  "src/Connascence.Core/Scoring.cs": {
+    "FP0001": 9,
+    "FP0002": 6,
+    "FP0003": 2,
+    "FP0005": 15,
+    "FP0014": 2
+  },
+  "src/Connascence.Core/Settings.cs": {
+    "FP0002": 2,
+    "FP0005": 6,
+    "FP0014": 6
+  },
+  "src/Connascence.Core/Text.cs": {
+    "FP0001": 3,
+    "FP0002": 3,
+    "FP0005": 2,
+    "FP0008": 1
+  }
+}

@@ -5,11 +5,11 @@ namespace Connascence
     /// <summary>Plain-English description of each kind, and the general way to weaken it.</summary>
     public static class Catalog
     {
-        public sealed class Entry
+        public sealed record Entry
         {
-            public Kind Kind;
-            public string Means;
-            public string Weaken;
+            public Kind Kind { get; init; }
+            public string Means { get; init; } = "";
+            public string Weaken { get; init; } = "";
         }
 
         public static readonly IReadOnlyList<Entry> Kinds = new List<Entry>
@@ -25,7 +25,7 @@ namespace Connascence
             new Entry { Kind = Kind.Identity, Means = "Places must share the very same object instance (static or global mutable state).", Weaken = "Give the state one owner and pass it in, or make it immutable." },
         };
 
-        public static Entry Of(Kind k)
+        public static Entry? Of(Kind k)
         {
             foreach (var e in Kinds) if (e.Kind == k) return e;
             return null;

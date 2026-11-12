@@ -24,10 +24,10 @@ All weights are in `.connascence.json`. Nobody has validated them, so `connascen
 
 ## Quick start
 
-The tool isn't on NuGet yet. Build it and install it from the local package (needs the .NET 8 SDK):
+The tool isn't on NuGet yet. Build it and install it from the local package (needs the .NET 11 SDK):
 
 ```sh
-git clone https://github.com/ptetau/connascence-scorer && cd connascence-scorer
+git clone --recurse-submodules https://github.com/ptetau/connascence-scorer && cd connascence-scorer
 dotnet pack src/Connascence.Cli -o ./nupkg
 dotnet tool install -g Connascence.Tool --add-source ./nupkg
 ```
@@ -139,8 +139,10 @@ dotnet_diagnostic.CNM01.severity = suggestion
 ## Building
 
 ```sh
+git submodule update --init                     # external/functional-csharp (FunctionalLint), if you cloned without it
 dotnet build                                    # needs nuget.org for Microsoft.CodeAnalysis.CSharp
 dotnet run --project tests/Connascence.Tests    # unit tests
+python3 scripts/functional-gate.py              # FunctionalLint on Connascence.Core: no new violations
 python3 tests/scenarios/run.py                  # detection, change-prediction and gate scenarios
 tests/e2e.sh                                    # full workflow in a throwaway git repo (needs connascence on PATH)
 python3 tests/skills/run.py                     # skill evals: real Claude Code sessions, graded (costs API usage)
@@ -148,9 +150,11 @@ dotnet pack src/Connascence.Cli                 # the dotnet tool
 dotnet pack src/Connascence.Analyzers           # the analyzer package
 ```
 
-Offline, build against the Roslyn that ships inside the .NET SDK: `dotnet build -p:UseSdkRoslyn=true -p:RestoreSources=<empty folder>`. That works for the CLI and tests. The analyzer then has to target `net8.0` (`-p:AnalyzerTfm=net8.0`), which runs in `dotnet build` but not in Visual Studio.
+Offline, build against the Roslyn that ships inside the .NET SDK: `dotnet build -p:UseSdkRoslyn=true -p:RestoreSources=<empty folder>`. That works for the CLI and tests. The analyzer then has to target `net11.0` (`-p:AnalyzerTfm=net11.0`), which runs in `dotnet build` but not in Visual Studio.
 
 See `tests/scenarios/README.md` and `tests/skills/README.md` for what those suites check.
+
+`Connascence.Core` is a functional core, checked by [FunctionalLint](https://github.com/ptetau/functional-csharp). It is being migrated from imperative code: see [docs/functional-core.md](docs/functional-core.md).
 
 ## Known limits
 

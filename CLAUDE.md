@@ -5,7 +5,7 @@ pre-commit gate and three agent skills that decide what to do about it. See READ
 
 ## Layout
 
-- `src/Connascence.Core`: detectors (`CSharp/`, `Generic/`), scoring, settings
+- `src/Connascence.Core`: detectors (`CSharp/`, `Generic/`), scoring, settings. A functional core (see below)
 - `src/Connascence.Cli`: the `connascence` command: workspace walk, futures, baseline, gate, reports
 - `src/Connascence.Analyzers`: the same C# findings as Roslyn build warnings
 - `skills/`: connascence-review, connascence-futures-explore, connascence-futures-interview
@@ -13,6 +13,8 @@ pre-commit gate and three agent skills that decide what to do about it. See READ
 - `tests/fixtures/tally`: realistic sample app with planted coupling, shared by scenarios and skill evals
 - `tests/scenarios`: detection, change-prediction and gate scenarios (see its README)
 - `tests/skills`: skill evals that run real Claude Code sessions (see its README)
+- `external/functional-csharp`: FunctionalLint, a git submodule (`git submodule update --init`)
+- `scripts/functional-gate.py`: the FunctionalLint gate for Core
 
 ## Checks to run
 
@@ -20,6 +22,7 @@ pre-commit gate and three agent skills that decide what to do about it. See READ
 dotnet build
 dotnet run --project tests/Connascence.Tests --no-build
 python3 tests/scenarios/run.py
+python3 scripts/functional-gate.py
 ```
 
 Skill evals cost API usage; run them when a skill or the CLI output an agent reads has changed:
@@ -50,3 +53,17 @@ If .connascence/futures.json is missing or stale, run the connascence-futures-ex
 
 The skills live in `skills/`; when working in this repo, read them from there (for example `skills/connascence-review/SKILL.md`)
 if they aren't installed as Claude Code skills. The futures are in `.connascence/futures.json`; `samples/` is excluded on purpose.
+
+## Functional core
+
+`src/Connascence.Core` is checked by FunctionalLint and is being migrated to functional C#. Read
+`docs/functional-core.md` before changing it. In short:
+- Write new Core code functionally: records with `init`, static classes, LINQ instead of loops, no reassignment,
+  immutable collections, `IReadOnlyList<T>` in signatures, `TryGetValue`/`FirstOrDefault` instead of calls that throw,
+  `StringComparison.Ordinal` and `CultureInfo.InvariantCulture`. Full guide:
+  `external/functional-csharp/FunctionalLint/agents/AGENTS.md`.
+- Keep to netstandard2.0 APIs: the Roslyn analyzer compiles the same source.
+- `scripts/functional-gate.py` fails if any file gains a violation. After fixing some, lock it in with `--update`.
+- Never switch a rule off (`#pragma`, `[SuppressMessage]`, `#nullable disable`, severities), and don't edit
+  `functionallint.policy`. Ask the owner if a rule seems wrong.
+

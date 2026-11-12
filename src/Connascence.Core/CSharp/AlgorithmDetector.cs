@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -15,8 +16,8 @@ namespace Connascence.CSharp
     /// </summary>
     public sealed class AlgorithmDetector : ICSharpDetector
     {
-        static readonly HashSet<string> FormatMethods = new HashSet<string> { "ToString", "ParseExact", "TryParseExact" };
-        static readonly HashSet<string> RegexMethods = new HashSet<string> { "IsMatch", "Match", "Matches", "Replace", "Split" };
+        static readonly ImmutableHashSet<string> FormatMethods = ImmutableHashSet.Create("ToString", "ParseExact", "TryParseExact");
+        static readonly ImmutableHashSet<string> RegexMethods = ImmutableHashSet.Create("IsMatch", "Match", "Matches", "Replace", "Split");
         static readonly string[] CryptoTypes =
         {
             "MD5", "SHA1", "SHA256", "SHA384", "SHA512", "HMACMD5", "HMACSHA1", "HMACSHA256", "HMACSHA384", "HMACSHA512",
@@ -28,19 +29,19 @@ namespace Connascence.CSharp
             return DuplicateBodies(ctx).Concat(SharedFormats(ctx)).Concat(Crypto(ctx));
         }
 
-        sealed class Body
+        sealed record Body
         {
-            public BlockSyntax Block;
-            public List<StatementSyntax> Statements;
-            public List<string> Keys;     // one normalised key per top-level statement
-            public int[] Weight;          // statements inside each top-level statement, blocks not counted
+            public required BlockSyntax Block { get; init; }
+            public required IReadOnlyList<StatementSyntax> Statements { get; init; }
+            public required IReadOnlyList<string> Keys { get; init; }   // one normalised key per top-level statement
+            public required int[] Weight { get; init; }                 // statements inside each top-level statement, blocks not counted
         }
 
-        sealed class Occurrence
+        sealed record Occurrence
         {
-            public Body Body;
-            public int Start;
-            public int Length;
+            public required Body Body { get; init; }
+            public int Start { get; init; }
+            public int Length { get; init; }
         }
 
         /// <summary>
@@ -85,8 +86,7 @@ namespace Connascence.CSharp
                 {
                     var g = string.Join("\n", keys.Skip(i).Take(Math.Min(gram, keys.Count)));
                     if (!seen.Add(g)) continue;
-                    List<int> list;
-                    if (!index.TryGetValue(g, out list)) { list = new List<int>(); index[g] = list; }
+                    if (!index.TryGetValue(g, out var list)) { list = new List<int>(); index[g] = list; }
                     list.Add(b);
                 }
             }
@@ -113,8 +113,7 @@ namespace Connascence.CSharp
                 for (int k = 0; k < len; k++) if (counted.Add(bodies[a].Keys[ai + k])) weight += bodies[a].Weight[ai + k];
                 if (weight < min) continue;
                 var key = string.Join("\n", bodies[a].Keys.Skip(ai).Take(len));
-                List<Occurrence> occ;
-                if (!groups.TryGetValue(key, out occ)) { occ = new List<Occurrence>(); groups[key] = occ; }
+                if (!groups.TryGetValue(key, out var occ)) { occ = new List<Occurrence>(); groups[key] = occ; }
                 if (!occ.Any(o => o.Body == bodies[a])) occ.Add(new Occurrence { Body = bodies[a], Start = ai, Length = len });
                 if (!occ.Any(o => o.Body == bodies[b])) occ.Add(new Occurrence { Body = bodies[b], Start = bi, Length = len });
             }
@@ -171,7 +170,7 @@ namespace Connascence.CSharp
         static bool Overlaps(SyntaxNode a, SyntaxNode b) => a.SyntaxTree == b.SyntaxTree && a.Span.IntersectsWith(b.Span);
 
         /// <summary>Longest run of equal keys shared by two lists (classic dynamic programming; bodies are short).</summary>
-        static void LongestRun(List<string> a, List<string> b, out int aStart, out int bStart, out int length)
+        static void LongestRun(IReadOnlyList<string> a, IReadOnlyList<string> b, out int aStart, out int bStart, out int length)
         {
             aStart = bStart = length = 0;
             var prev = new int[b.Count + 1];
@@ -189,10 +188,10 @@ namespace Connascence.CSharp
         }
 
         /// <summary>Names of parameters and locals declared in or for this body. These are renamed freely when code is copied.</summary>
-        static HashSet<string> LocalNames(BlockSyntax block)
+        static ImmutableHashSet<string> LocalNames(BlockSyntax block)
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
-            ParameterListSyntax pars = null;
+            ParameterListSyntax? pars = null;
             switch (block.Parent)
             {
                 case BaseMethodDeclarationSyntax m: pars = m.ParameterList; break;
@@ -214,11 +213,11 @@ namespace Connascence.CSharp
                     case ParameterSyntax p: names.Add(p.Identifier.Text); break;
                 }
             }
-            return names;
+            return names.ToImmutableHashSet(StringComparer.Ordinal);
         }
 
         /// <summary>Token text of a statement, with local and parameter names replaced by a placeholder (when locals is given).</summary>
-        static string Normalise(SyntaxNode node, HashSet<string> locals)
+        static string Normalise(SyntaxNode node, ImmutableHashSet<string>? locals)
         {
             var sb = new StringBuilder();
             foreach (var t in node.DescendantTokens())
@@ -278,7 +277,7 @@ namespace Connascence.CSharp
                 var lits = kv.Value;
                 var locs = lits.Select(l => ctx.Locate(l, "use")).ToList();
                 if (locs.Select(l => l.Anchor).Distinct().Count() < 2) continue;
-                var isPattern = kv.Key.StartsWith("pattern|");
+                var isPattern = kv.Key.StartsWith("pattern|", StringComparison.Ordinal);
                 var what = (isPattern ? "regex pattern " : "format ") + "\"" + Text.Quote(lits[0].Token.ValueText) + "\"";
                 yield return new Finding
                 {
@@ -300,8 +299,7 @@ namespace Connascence.CSharp
 
         static void Add<T>(Dictionary<string, List<T>> groups, string key, T item)
         {
-            List<T> list;
-            if (!groups.TryGetValue(key, out list)) { list = new List<T>(); groups[key] = list; }
+            if (!groups.TryGetValue(key, out var list)) { list = new List<T>(); groups[key] = list; }
             list.Add(item);
         }
 

@@ -12,23 +12,23 @@ namespace Connascence
     /// </summary>
     public static class CrossLanguage
     {
-        static readonly Dictionary<string, string> Pairs = new Dictionary<string, string>
+        static readonly IReadOnlyDictionary<string, string> Pairs = new Dictionary<string, string>
         {
             ["CNM01"] = "GNM01",
             ["CNV02"] = "GNV02",
         };
 
-        public static List<Finding> Merge(List<Finding> findings, Settings settings)
+        public static List<Finding> Merge(IReadOnlyList<Finding> findings, Settings settings)
         {
             var removed = new HashSet<Finding>();
             foreach (var pair in Pairs)
             {
                 var generic = findings.Where(f => f.RuleId == pair.Value && f.GroupKey != null)
-                    .GroupBy(f => Key(f.GroupKey)).ToDictionary(g => g.Key, g => g.ToList());
+                    .GroupBy(f => Key(f.GroupKey!)).ToDictionary(g => g.Key, g => g.ToList());
                 foreach (var cs in findings.Where(f => f.RuleId == pair.Key && f.GroupKey != null).ToList())
                 {
-                    List<Finding> others;
-                    if (!generic.TryGetValue(Key(cs.GroupKey), out others)) continue;
+                    List<Finding>? others;
+                    if (!generic.TryGetValue(Key(cs.GroupKey!), out others)) continue;
                     var other = others.FirstOrDefault(o => !removed.Contains(o));
                     if (other == null) continue;
                     removed.Add(other);

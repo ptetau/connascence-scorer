@@ -11,10 +11,10 @@ text-based mode.
 
 ## Install
 
-The tool isn't on NuGet. Build it from source (needs the .NET 8 SDK):
+The tool isn't on NuGet. Build it from source (needs the .NET 11 SDK):
 
 ```sh
-git clone https://github.com/ptetau/connascence-scorer && cd connascence-scorer
+git clone --recurse-submodules https://github.com/ptetau/connascence-scorer && cd connascence-scorer
 dotnet pack src/Connascence.Cli -o ./nupkg
 dotnet tool install -g Connascence.Tool --add-source ./nupkg
 connascence version          # prints 0.2.0

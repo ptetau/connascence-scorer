@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -23,11 +24,11 @@ namespace Connascence.CSharp
             return DuplicatedConstants(ctx).Concat(SharedState(ctx));
         }
 
-        sealed class Constant
+        sealed record Constant
         {
-            public VariableDeclaratorSyntax Declarator;
-            public string Type;
-            public string Value;
+            public required VariableDeclaratorSyntax Declarator { get; init; }
+            public string? Type { get; init; }
+            public required string Value { get; init; }
         }
 
         IEnumerable<Finding> DuplicatedConstants(CSharpContext ctx)
@@ -46,8 +47,7 @@ namespace Connascence.CSharp
                         var words = Text.Words(v.Identifier.Text).Where(w => w != "default").OrderBy(w => w).ToList();
                         if (words.Count == 0) continue;
                         var key = string.Join(" ", words.ToArray());
-                        List<Constant> list;
-                        if (!groups.TryGetValue(key, out list)) { list = new List<Constant>(); groups[key] = list; }
+                        if (!groups.TryGetValue(key, out var list)) { list = new List<Constant>(); groups[key] = list; }
                         list.Add(new Constant { Declarator = v, Type = CSharpContext.TypeNameOf(v), Value = lit.Token.ValueText });
                     }
                 }
@@ -125,8 +125,7 @@ namespace Connascence.CSharp
                     if (!names.Contains(id.Identifier.Text)) continue;
                     var s = ctx.SymbolOf(id);
                     if (s == null || !candidates.ContainsKey(s.OriginalDefinition)) continue;
-                    List<SyntaxNode> list;
-                    if (!uses.TryGetValue(s.OriginalDefinition, out list)) { list = new List<SyntaxNode>(); uses[s.OriginalDefinition] = list; }
+                    if (!uses.TryGetValue(s.OriginalDefinition, out var list)) { list = new List<SyntaxNode>(); uses[s.OriginalDefinition] = list; }
                     list.Add(id);
                 }
             }
@@ -179,7 +178,7 @@ namespace Connascence.CSharp
             if (type == null) return false;
             if (type is ArrayTypeSyntax) return true;
             var t = type.ToString();
-            return MutableCollections.Any(m => t.StartsWith(m) || t.Contains("." + m));
+            return MutableCollections.Any(m => t.StartsWith(m, StringComparison.Ordinal) || t.Contains("." + m));
         }
     }
 }

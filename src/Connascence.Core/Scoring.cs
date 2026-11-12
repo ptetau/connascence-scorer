@@ -1,40 +1,41 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace Connascence
 {
-    public sealed class KindSummary
+    public sealed record KindSummary
     {
-        public Kind Kind { get; set; }
-        public int Findings { get; set; }
-        public double Cost { get; set; }
+        public Kind Kind { get; init; }
+        public int Findings { get; init; }
+        public double Cost { get; init; }
     }
 
-    public sealed class ScoreSummary
+    public sealed record ScoreSummary
     {
-        public int Lines { get; set; }
-        public int Files { get; set; }
-        public double TotalCost { get; set; }
-        public double LoadPerKloc { get; set; }
-        public int Score { get; set; }
-        public int AcceptedFindings { get; set; }
-        public double AcceptedCost { get; set; }
-        public List<KindSummary> ByKind { get; set; } = new List<KindSummary>();
-        public List<KeyValuePair<string, double>> ByFile { get; set; } = new List<KeyValuePair<string, double>>();
+        public int Lines { get; init; }
+        public int Files { get; init; }
+        public double TotalCost { get; init; }
+        public double LoadPerKloc { get; init; }
+        public int Score { get; init; }
+        public int AcceptedFindings { get; init; }
+        public double AcceptedCost { get; init; }
+        public IReadOnlyList<KindSummary> ByKind { get; set; } = new List<KindSummary>();
+        public IReadOnlyList<KeyValuePair<string, double>> ByFile { get; set; } = new List<KeyValuePair<string, double>>();
     }
 
     public static class Scoring
     {
         /// <summary>Distance between a set of locations = the widest gap between any two of them.</summary>
-        public static Distance DistanceOf(IList<CodeLocation> locs)
+        public static Distance DistanceOf(IReadOnlyList<CodeLocation> locs)
         {
             if (locs.Count <= 1) return Distance.SameMember;
             if (locs.Select(l => l.Project).Distinct().Count() > 1) return Distance.CrossProject;
             var d = Distance.SameMember;
-            var distinct = locs.GroupBy(l => l.Anchor + "|" + (l.Type == null ? l.Line.ToString() : "")).Select(g => g.First()).Take(200).ToList();
+            var distinct = locs.GroupBy(l => l.Anchor + "|" + (l.Type == null ? l.Line.ToString(CultureInfo.InvariantCulture) : "")).Select(g => g.First()).Take(200).ToList();
             for (int i = 0; i < distinct.Count; i++)
                 for (int j = i + 1; j < distinct.Count; j++)
                 {
@@ -75,7 +76,7 @@ namespace Connascence
             {
                 var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(raw));
                 var sb = new StringBuilder();
-                for (int i = 0; i < 5; i++) sb.Append(bytes[i].ToString("x2"));
+                for (int i = 0; i < 5; i++) sb.Append(bytes[i].ToString("x2", CultureInfo.InvariantCulture));
                 return sb.ToString();
             }
         }
@@ -85,7 +86,7 @@ namespace Connascence
         /// because code was copied into the finding for the copy. Fixing the copy fixes them too,
         /// so they are listed under it and their cost is added to it.
         /// </summary>
-        public static List<Finding> Consolidate(List<Finding> findings)
+        public static IReadOnlyList<Finding> Consolidate(IReadOnlyList<Finding> findings)
         {
             foreach (var f in findings)
                 f.Locations = f.Locations.GroupBy(l => l.File + ":" + l.Line + ":" + l.Role).Select(g => g.First()).ToList();
@@ -111,7 +112,7 @@ namespace Connascence
             return findings.Where(f => !removed.Contains(f)).ToList();
         }
 
-        public static ScoreSummary Summarise(IList<Finding> findings, int lines, int files, Settings s)
+        public static ScoreSummary Summarise(IReadOnlyList<Finding> findings, int lines, int files, Settings s)
         {
             var open = findings.Where(f => !f.Accepted).ToList();
             var total = open.Sum(f => f.Cost);

@@ -20,6 +20,8 @@
     <Version>0.2.0</Version>
     <Description>Build-time connascence warnings: magic values, positional parameters, copied logic, call-order rules, fixed waits, duplicated constants and shared mutable state.</Description>
     <NoWarn>$(NoWarn);RS2008;RS1036</NoWarn>
+    <!-- The shared Core source has nullable annotations; Core itself checks them (with FunctionalLint). -->
+    <Nullable>annotations</Nullable>
   </PropertyGroup>
 
   <ItemGroup>

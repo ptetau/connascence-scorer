@@ -89,7 +89,7 @@ def claude_env(extra_path):
 
 
 def find_cli_dll():
-    dlls = sorted(glob.glob(os.path.join(REPO, "src", "Connascence.Cli", "bin", "*", "net8.0", "connascence.dll")),
+    dlls = sorted(glob.glob(os.path.join(REPO, "src", "Connascence.Cli", "bin", "*", "net11.0", "connascence.dll")),
                   key=os.path.getmtime, reverse=True)
     if not dlls:
         sys.exit("Build the CLI first: dotnet build")

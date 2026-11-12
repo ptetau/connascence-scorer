@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -75,7 +76,7 @@ namespace Connascence.CSharp
                                     (evidence ? "The class only finds out at runtime (" + (flags.Count > 0 ? "it tracks a " + flags[0].Identifier.Text + " flag" : "it throws InvalidOperationException") + ")."
                                               : "Nothing in the types stops a caller getting the order wrong."),
                             Suggestion = "Make the wrong order impossible: do the setup in the constructor or a static factory (for example `" + className + ".Create" +
-                                         (init.Identifier.Text.StartsWith("Open") || init.Identifier.Text.StartsWith("Connect") ? "Connected" : "") +
+                                         (init.Identifier.Text.StartsWith("Open", StringComparison.Ordinal) || init.Identifier.Text.StartsWith("Connect", StringComparison.Ordinal) ? "Connected" : "") +
                                          "Async()`), or have " + init.Identifier.Text + "() return a different type that is the only one with " + otherNames + ".",
                             ChangeProbe = "If setup gains another step, or more callers are added, each one must get the order right by hand. Is this class likely to be used in new places?",
                         };
@@ -84,14 +85,14 @@ namespace Connascence.CSharp
             }
         }
 
-        static bool IsInitName(string name, IList<string> prefixes)
+        static bool IsInitName(string name, IReadOnlyList<string> prefixes)
         {
             foreach (var p in prefixes)
             {
                 if (!name.StartsWith(p, System.StringComparison.Ordinal)) continue;
                 if (name.Length == p.Length) return true;
                 var next = name[p.Length];
-                if (char.IsUpper(next) && !name.Substring(p.Length).StartsWith("Async") || name.Substring(p.Length) == "Async") return true;
+                if (char.IsUpper(next) && !name.Substring(p.Length).StartsWith("Async", StringComparison.Ordinal) || name.Substring(p.Length) == "Async") return true;
             }
             return false;
         }
@@ -106,8 +107,8 @@ namespace Connascence.CSharp
                     if (ma == null) continue;
                     var target = ma.Expression.ToString();
                     var name = ma.Name.Identifier.Text;
-                    bool sleep = target.EndsWith("Thread") && name == "Sleep";
-                    bool delay = target.EndsWith("Task") && name == "Delay";
+                    bool sleep = target.EndsWith("Thread", StringComparison.Ordinal) && name == "Sleep";
+                    bool delay = target.EndsWith("Task", StringComparison.Ordinal) && name == "Delay";
                     if (!sleep && !delay) continue;
                     var arg = inv.ArgumentList.Arguments.FirstOrDefault()?.ToString() ?? "";
                     if (arg == "0" || arg.Contains("Infinite")) continue;

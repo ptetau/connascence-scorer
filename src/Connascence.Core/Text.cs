@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.RegularExpressions;
 
@@ -9,13 +10,13 @@ namespace Connascence
     public static class Text
     {
         /// <summary>FNV-1a hash. Unlike string.GetHashCode it is the same in every process, so ids stay stable.</summary>
-        public static string StableHash(string s)
+        public static string StableHash(string? s)
         {
             unchecked
             {
                 uint h = 2166136261;
                 foreach (var c in s ?? "") { h ^= c; h *= 16777619; }
-                return h.ToString("x8");
+                return h.ToString("x8", CultureInfo.InvariantCulture);
             }
         }
 
@@ -26,14 +27,14 @@ namespace Connascence
             Count(n, noun) + " " + (n == 1 ? verbSingular : verbPlural);
 
         /// <summary>"the 1 caller" / "both callers" / "all 5 callers"</summary>
-        public static string All(int n, string singular, string plural = null) =>
+        public static string All(int n, string singular, string? plural = null) =>
             n == 1 ? "the " + singular : n == 2 ? "both " + (plural ?? singular + "s") : "all " + n + " " + (plural ?? singular + "s");
 
-        public static string Count(int n, string singular, string plural = null) =>
+        public static string Count(int n, string singular, string? plural = null) =>
             n + " " + (n == 1 ? singular : (plural ?? singular + "s"));
 
         /// <summary>"in 4 places across 3 files" / "in 2 places in one method" etc.</summary>
-        public static string Spread(IList<CodeLocation> locs)
+        public static string Spread(IReadOnlyList<CodeLocation> locs)
         {
             var files = locs.Select(l => l.File).Distinct().Count();
             var projects = locs.Select(l => l.Project).Distinct().Count();
@@ -54,14 +55,14 @@ namespace Connascence
             return string.Join(", ", names.Take(max).ToArray()) + " and " + (names.Count - max) + " more";
         }
 
-        public static string Join(IList<string> items)
+        public static string Join(IReadOnlyList<string> items)
         {
             if (items.Count == 0) return "";
             if (items.Count == 1) return items[0];
             return string.Join(", ", items.Take(items.Count - 1).ToArray()) + " and " + items[items.Count - 1];
         }
 
-        public static string Quote(string literal)
+        public static string Quote(string? literal)
         {
             if (literal == null) return "";
             if (literal.Length > 40) literal = literal.Substring(0, 37) + "...";
@@ -69,7 +70,7 @@ namespace Connascence
         }
 
         /// <summary>Splits "MaxNameLength", "MAX_NAME_LENGTH", "maxNameLength" into lower-case words.</summary>
-        public static List<string> Words(string identifier)
+        public static List<string> Words(string? identifier)
         {
             var spaced = Regex.Replace(identifier ?? "", "([a-z0-9])([A-Z])", "$1 $2");
             spaced = Regex.Replace(spaced, "([A-Z]+)([A-Z][a-z])", "$1 $2");
@@ -77,7 +78,7 @@ namespace Connascence
                 .Select(w => w.ToLowerInvariant()).ToList();
         }
 
-        public static string PascalCase(string s)
+        public static string PascalCase(string? s)
         {
             var words = Words(Regex.Replace(s ?? "", "[^A-Za-z0-9_ ]", " "));
             var result = string.Concat(words.Select(w => char.ToUpperInvariant(w[0]) + w.Substring(1)).ToArray());
@@ -95,7 +96,7 @@ namespace Connascence
     {
         static readonly Regex Marker = new Regex(@"connascence:\s*accept\b[:\s-]*(?<reason>.*)$", RegexOptions.IgnoreCase);
 
-        public static string ReasonFor(Func<string, string[]> linesOf, Finding f)
+        public static string? ReasonFor(Func<string, string[]?> linesOf, Finding f)
         {
             foreach (var loc in f.Locations)
             {

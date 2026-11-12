@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace Connascence.Generic
 {
-    public sealed class TextFile
+    public sealed record TextFile
     {
-        public string RelativePath { get; set; }
-        public string Project { get; set; }
-        public string Text { get; set; }
-        public string[] Lines { get; set; }
+        public required string RelativePath { get; init; }
+        public required string Project { get; init; }
+        public required string Text { get; init; }
+        public required string[] Lines { get; init; }
     }
 
     /// <summary>
@@ -19,17 +20,13 @@ namespace Connascence.Generic
     /// </summary>
     public static class GenericEngine
     {
-        public static readonly HashSet<string> SourceExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
+        public static readonly ImmutableHashSet<string> SourceExtensions = ImmutableHashSet.Create(StringComparer.OrdinalIgnoreCase,
             ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".java", ".kt", ".kts", ".scala", ".go", ".rs", ".rb", ".php",
-            ".swift", ".c", ".h", ".cpp", ".cc", ".hpp", ".m", ".fs", ".vb", ".dart", ".lua", ".ex", ".exs", ".cs", ".sql", ".sh", ".ps1",
-        };
+            ".swift", ".c", ".h", ".cpp", ".cc", ".hpp", ".m", ".fs", ".vb", ".dart", ".lua", ".ex", ".exs", ".cs", ".sql", ".sh", ".ps1");
 
-        static readonly HashSet<string> Keywords = new HashSet<string>
-        {
+        static readonly ImmutableHashSet<string> Keywords = ImmutableHashSet.Create(
             "if", "while", "for", "foreach", "switch", "catch", "return", "function", "def", "func", "fn", "new", "typeof", "sizeof",
-            "elif", "when", "match", "using", "lock", "with", "assert", "print", "await", "yield", "not", "and", "or", "in", "is",
-        };
+            "elif", "when", "match", "using", "lock", "with", "assert", "print", "await", "yield", "not", "and", "or", "in", "is");
 
         const string Literal = @"-?\d+(?:\.\d+)?|""[^""\n]*""|'[^'\n]*'";
         const string Op = @"===|!==|==|!=|<=|>=|<|>";
@@ -59,7 +56,7 @@ namespace Connascence.Generic
             findings.AddRange(Globals(files));
 
             var byPath = files.ToDictionary(f => f.RelativePath, f => f.Lines);
-            Func<string, string[]> linesOf = p => { string[] l; return byPath.TryGetValue(p, out l) ? l : null; };
+            Func<string, string[]?> linesOf = p => byPath.TryGetValue(p, out var l) ? l : null;
             foreach (var f in findings)
             {
                 Scoring.Score(f, s);
@@ -74,8 +71,9 @@ namespace Connascence.Generic
             return new TextFile { RelativePath = relativePath, Project = project, Text = text, Lines = text.Replace("\r\n", "\n").Split('\n') };
         }
 
-        static bool IsComment(string trimmed) =>
-            trimmed.StartsWith("//") || trimmed.StartsWith("#") || trimmed.StartsWith("*") || trimmed.StartsWith("/*") || trimmed.StartsWith("--") || trimmed.StartsWith("'''") || trimmed.StartsWith("\"\"\"");
+        static readonly ImmutableArray<string> CommentStarts = ImmutableArray.Create("//", "#", "*", "/*", "--", "'''", "\"\"\"");
+
+        static bool IsComment(string trimmed) => CommentStarts.Any(c => trimmed.StartsWith(c, StringComparison.Ordinal));
 
         static CodeLocation Loc(TextFile f, int lineIndex, string role)
         {
@@ -96,15 +94,15 @@ namespace Connascence.Generic
 
         // ---------- Definitions (to know which functions are "ours") ----------
 
-        sealed class Definition
+        sealed record Definition
         {
-            public TextFile File;
-            public int Line;
-            public string Name;
-            public List<string> Params;
+            public required TextFile File { get; init; }
+            public int Line { get; init; }
+            public required string Name { get; init; }
+            public required IReadOnlyList<string> Params { get; init; }
         }
 
-        static Dictionary<string, List<Definition>> Definitions(IList<TextFile> files)
+        static IReadOnlyDictionary<string, List<Definition>> Definitions(IList<TextFile> files)
         {
             var result = new Dictionary<string, List<Definition>>();
             foreach (var f in files)
@@ -117,9 +115,9 @@ namespace Connascence.Generic
                     var name = m.Groups["name"].Value;
                     if (Keywords.Contains(name)) continue;
                     var ps = m.Groups["params"].Value.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0)
-                        .Where(p => p != "self" && p != "cls" && p != "this" && !p.StartsWith("&self") && !p.StartsWith("*") && !p.StartsWith("**")).ToList();
-                    List<Definition> list;
-                    if (!result.TryGetValue(name, out list)) { list = new List<Definition>(); result[name] = list; }
+                        .Where(p => p != "self" && p != "cls" && p != "this" && !p.StartsWith("&self", StringComparison.Ordinal) && !p.StartsWith("*", StringComparison.Ordinal))
+                        .ToList();
+                    if (!result.TryGetValue(name, out var list)) { list = new List<Definition>(); result[name] = list; }
                     list.Add(new Definition { File = f, Line = cl.Key, Name = name, Params = ps });
                 }
             }
@@ -156,11 +154,11 @@ namespace Connascence.Generic
                         // typeof x === "function" and document.readyState === "loading" compare with values the platform defines.
                         if (platform.Contains(subject) || platform.Contains(rawSubject)) continue;
                         var before = cl.Value.Substring(0, m.Groups["subject"].Index).TrimEnd();
-                        if (before.EndsWith("typeof")) continue;
+                        if (before.EndsWith("typeof", StringComparison.Ordinal)) continue;
                         if (subject.Length == 0 || Keywords.Contains(subject) || subject == "null" || subject == "None" || subject == "nil") continue;
                         var subjectWords = Text.Words(subject);
                         bool codeLikeSubject = subjectWords.Count > 0 && codeLike.Contains(subjectWords[subjectWords.Count - 1]);
-                        bool isString = lit.StartsWith("\"") || lit.StartsWith("'");
+                        bool isString = lit.StartsWith("\"", StringComparison.Ordinal) || lit.StartsWith("'", StringComparison.Ordinal);
                         var op = m.Groups["op"].Value;
                         // Assigning a literal is only interesting when the target holds a code (status = 7), not for every x = 5.
                         if (op == "=" && !codeLikeSubject) continue;
@@ -172,8 +170,7 @@ namespace Connascence.Generic
                         if (isString && relational) continue; // "<" between strings is usually generics or markup, not a comparison
                         var tag = !isString && relational ? "limit" : (isString ? "str" : "num");
                         var key = tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant();
-                        List<CodeLocation> list;
-                        if (!groups.TryGetValue(key, out list)) { list = new List<CodeLocation>(); groups[key] = list; subjects[key] = subject; }
+                        if (!groups.TryGetValue(key, out var list)) { list = new List<CodeLocation>(); groups[key] = list; subjects[key] = subject; }
                         list.Add(Loc(f, cl.Key, "use"));
                     }
                 }
@@ -220,7 +217,7 @@ namespace Connascence.Generic
 
         // ---------- Boolean flags ----------
 
-        static IEnumerable<Finding> BooleanFlags(IList<TextFile> files, Dictionary<string, List<Definition>> defs)
+        static IEnumerable<Finding> BooleanFlags(IList<TextFile> files, IReadOnlyDictionary<string, List<Definition>> defs)
         {
             var groups = new Dictionary<string, List<CodeLocation>>();
             foreach (var f in files)
@@ -234,8 +231,7 @@ namespace Connascence.Generic
                         if (Keywords.Contains(fn) || !defs.ContainsKey(fn)) continue;
                         var args = m.Groups["args"].Value.Split(',');
                         if (!args.Any(a => Bool.IsMatch(a) && !a.Contains("=") && !a.Contains(":"))) continue;
-                        List<CodeLocation> list;
-                        if (!groups.TryGetValue(fn, out list)) { list = new List<CodeLocation>(); groups[fn] = list; }
+                        if (!groups.TryGetValue(fn, out var list)) { list = new List<CodeLocation>(); groups[fn] = list; }
                         list.Add(Loc(f, cl.Key, "call site"));
                     }
                 }
@@ -262,7 +258,7 @@ namespace Connascence.Generic
 
         // ---------- Long parameter lists ----------
 
-        static IEnumerable<Finding> LongParameterLists(IList<TextFile> files, Dictionary<string, List<Definition>> defs, Settings s)
+        static IEnumerable<Finding> LongParameterLists(IList<TextFile> files, IReadOnlyDictionary<string, List<Definition>> defs, Settings s)
         {
             var callRegexCache = new Dictionary<string, Regex>();
             foreach (var kv in defs)
@@ -325,8 +321,7 @@ namespace Connascence.Generic
                 {
                     var key = string.Join("\n", ls.Skip(i).Take(k).Select(x => x.Value).ToArray());
                     hashes[i] = key;
-                    List<KeyValuePair<TextFile, int>> list;
-                    if (!windows.TryGetValue(key, out list)) { list = new List<KeyValuePair<TextFile, int>>(); windows[key] = list; }
+                    if (!windows.TryGetValue(key, out var list)) { list = new List<KeyValuePair<TextFile, int>>(); windows[key] = list; }
                     list.Add(new KeyValuePair<TextFile, int>(f, i));
                 }
                 hashAt[f] = hashes;
@@ -388,7 +383,7 @@ namespace Connascence.Generic
                 {
                     if (IsDefinitionLine(cl.Value)) continue;
                     var m = Sleep.Match(cl.Value);
-                    string title = null;
+                    string? title = null;
                     if (m.Success) title = m.Groups["call"].Value + "(" + Text.Quote(m.Groups["args"].Value) + ")";
                     else
                     {
@@ -448,8 +443,7 @@ namespace Connascence.Generic
 
         static void Add(Dictionary<string, List<CodeLocation>> g, string key, CodeLocation l)
         {
-            List<CodeLocation> list;
-            if (!g.TryGetValue(key, out list)) { list = new List<CodeLocation>(); g[key] = list; }
+            if (!g.TryGetValue(key, out var list)) { list = new List<CodeLocation>(); g[key] = list; }
             list.Add(l);
         }
     }

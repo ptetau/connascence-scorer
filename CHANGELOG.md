@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Needs .NET 11.** The tool, the CLI and the tests now target .NET 11 (the analyzer package still targets
+  netstandard2.0). Install the .NET 11 SDK or runtime before updating the tool.
+- `Connascence.Core` is now a functional core, checked by FunctionalLint (see `docs/functional-core.md`).
+  Findings are unchanged. On .NET 11 a per-file cost in the summary can differ by 0.1 from .NET 8, from rounding.
+
 ## 0.2.0 (2026-11-12)
 
 **Finding ids changed.** Several detectors now group places differently, so ids in an existing

@@ -15,7 +15,8 @@
     "**/DbScripts*/**",
     "**/????-??-??_*.sql",
     "**/V*__*.sql",
-    "samples/**"
+    "samples/**",
+    "external/**"
   ],
   "thresholds": {
     "minScore": 0,
