@@ -42,7 +42,7 @@ namespace Connascence.CSharp
             Files = files.ToImmutableArray();
             Settings = settings ?? new Settings();
             _files = Files.GroupBy(f => f.Tree).ToImmutableDictionary(g => g.Key, g => g.First());
-            _models = _files.Keys.ToImmutableDictionary(tree => tree, tree => compilation.GetSemanticModel(tree));
+            _models = Files.GroupBy(f => f.Tree).ToImmutableDictionary(g => g.Key, g => compilation.GetSemanticModel(g.Key));
             _calls = new Lazy<CallIndex>(FindCalls);
         }
 

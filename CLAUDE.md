@@ -56,7 +56,7 @@ if they aren't installed as Claude Code skills. The futures are in `.connascence
 
 ## Functional core
 
-`src/Connascence.Core` is checked by FunctionalLint and is being migrated to functional C#. Read
+`src/Connascence.Core` is functional C#, checked by FunctionalLint: every rule but FP0014 is a build error. Read
 `docs/functional-core.md` before changing it. In short:
 - Write new Core code functionally: records with `init`, static classes, LINQ instead of loops, no reassignment,
   immutable collections, `IReadOnlyList<T>` in signatures, `TryGetValue`/`FirstOrDefault` instead of calls that throw,

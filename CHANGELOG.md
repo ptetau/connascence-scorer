@@ -6,6 +6,8 @@
   netstandard2.0). Install the .NET 11 SDK or runtime before updating the tool.
 - `Connascence.Core` is now a functional core, checked by FunctionalLint (see `docs/functional-core.md`).
   Findings are unchanged. On .NET 11 a per-file cost in the summary can differ by 0.1 from .NET 8, from rounding.
+- Core API: findings are immutable records, `Scoring.Score` returns the scored finding, and `CSharpEngine.Analyze`
+  returns detector warnings with the findings instead of adding them to the context.
 
 ## 0.2.0 (2026-11-12)
 

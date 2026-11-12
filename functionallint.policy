@@ -8,18 +8,11 @@ global_level = 200
 # The functional core projects, relative to this file. The CLI, the Roslyn analyzer and the tests are shells.
 functional_lint.cores = src/Connascence.Core/Connascence.Core.csproj
 
-# Migration: Core was written imperatively. These rules are warnings until their last violation is fixed;
-# .functionallint-baseline holds the count per file, and the gate fails if any count grows.
-# When a rule reaches zero, remove it from both lists below.
-functional_lint.may_lower = FP0001, FP0002, FP0003, FP0004, FP0005, FP0008, FP0014, FP0015
-dotnet_diagnostic.FP0001.severity = warning
-dotnet_diagnostic.FP0002.severity = warning
-dotnet_diagnostic.FP0003.severity = warning
-dotnet_diagnostic.FP0004.severity = warning
-dotnet_diagnostic.FP0005.severity = warning
-dotnet_diagnostic.FP0008.severity = warning
+# Migration: Core was written imperatively, and every rule now passes except FP0014 (records holding lists, which
+# compare by reference). It stays a warning until the owner picks a value-equal collection type; see
+# docs/functional-core.md. .functionallint-baseline.json holds the count per file, and the gate fails if any grows.
+functional_lint.may_lower = FP0014
 dotnet_diagnostic.FP0014.severity = warning
-dotnet_diagnostic.FP0015.severity = warning
 
 # Namespaces of existing imperative code, which the rules skip and the core reaches only through adapters.
 functional_lint.legacy_namespaces = none

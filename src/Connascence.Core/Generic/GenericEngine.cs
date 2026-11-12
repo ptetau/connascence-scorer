@@ -44,7 +44,8 @@ namespace Connascence.Generic
         static readonly Regex RubyGlobal = new Regex(@"(?<![\w])\$(?<name>[a-z_]\w*)\s*(?:=[^=]|\+=|-=|<<)");
         static readonly Regex Bool = new Regex(@"(?<![\w$=:])\s*(?<b>true|false|True|False)\s*$");
 
-        public static IReadOnlyList<Finding> Analyze(IList<TextFile> files, Settings s)
+
+        public static IReadOnlyList<Finding> Analyze(IReadOnlyList<TextFile> files, Settings s)
         {
             var defs = Definitions(files);
             var findings = MagicValues(files, s)
@@ -72,20 +73,15 @@ namespace Connascence.Generic
 
         static CodeLocation Loc(TextFile f, int lineIndex, string role)
         {
-            var line = f.Lines[lineIndex].Trim();
-            if (line.Length > 160) line = line.Substring(0, 157) + "...";
+            var full = f.Lines[lineIndex].Trim();
+            var line = full.Length > 160 ? full.Substring(0, 157) + "..." : full;
             return new CodeLocation { File = f.RelativePath, Project = f.Project, Line = lineIndex + 1, Column = 1, Snippet = line, Role = role };
         }
 
-        static IEnumerable<KeyValuePair<int, string>> CodeLines(TextFile f)
-        {
-            for (int i = 0; i < f.Lines.Length; i++)
-            {
-                var t = f.Lines[i].Trim();
-                if (t.Length == 0 || IsComment(t)) continue;
-                yield return new KeyValuePair<int, string>(i, f.Lines[i]);
-            }
-        }
+        /// <summary>Lines that hold code (not blank, not comments), with their 0-based index.</summary>
+        static IEnumerable<KeyValuePair<int, string>> CodeLines(TextFile f) =>
+            f.Lines.Select((line, i) => new KeyValuePair<int, string>(i, line))
+                .Where(cl => cl.Value.Trim() is var t && t.Length > 0 && !IsComment(t));
 
         // ---------- Definitions (to know which functions are "ours") ----------
 
@@ -97,109 +93,119 @@ namespace Connascence.Generic
             public required IReadOnlyList<string> Params { get; init; }
         }
 
-        static IReadOnlyDictionary<string, List<Definition>> Definitions(IList<TextFile> files)
+        /// <summary>Function definitions by name: in the order each name is first defined, and looked up by name.</summary>
+        sealed record DefinitionIndex(
+            ImmutableArray<(string Name, ImmutableArray<Definition> Definitions)> InOrder,
+            ImmutableDictionary<string, ImmutableArray<Definition>> ByName);
+
+        static DefinitionIndex Definitions(IReadOnlyList<TextFile> files)
         {
-            var result = new Dictionary<string, List<Definition>>();
-            foreach (var f in files)
-            {
-                foreach (var cl in CodeLines(f))
-                {
-                    var m = Def.Match(cl.Value);
-                    if (!m.Success) m = MethodDef.Match(cl.Value);
-                    if (!m.Success) continue;
-                    var name = m.Groups["name"].Value;
-                    if (Keywords.Contains(name)) continue;
-                    var ps = m.Groups["params"].Value.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0)
-                        .Where(p => p != "self" && p != "cls" && p != "this" && !p.StartsWith("&self", StringComparison.Ordinal) && !p.StartsWith("*", StringComparison.Ordinal))
-                        .ToList();
-                    if (!result.TryGetValue(name, out var list)) { list = new List<Definition>(); result[name] = list; }
-                    list.Add(new Definition { File = f, Line = cl.Key, Name = name, Params = ps });
-                }
-            }
-            return result;
+            var inOrder = files.SelectMany(f => CodeLines(f).Select(cl => DefinitionAt(f, cl)))
+                .OfType<Definition>()
+                .GroupBy(d => d.Name)
+                .Select(g => (Name: g.Key, Definitions: g.ToImmutableArray()))
+                .ToImmutableArray();
+            return new DefinitionIndex(inOrder, inOrder.GroupBy(x => x.Name).ToImmutableDictionary(g => g.Key, g => g.First().Definitions));
+        }
+
+        static Definition? DefinitionAt(TextFile f, KeyValuePair<int, string> cl)
+        {
+            var def = Def.Match(cl.Value);
+            var m = def.Success ? def : MethodDef.Match(cl.Value);
+            if (!m.Success) return null;
+            var name = m.Groups["name"].Value;
+            if (Keywords.Contains(name)) return null;
+            var ps = m.Groups["params"].Value.Split(',').Select(p => p.Trim()).Where(p => p.Length > 0)
+                .Where(p => p != "self" && p != "cls" && p != "this" && !p.StartsWith("&self", StringComparison.Ordinal) && !p.StartsWith("*", StringComparison.Ordinal))
+                .ToImmutableArray();
+            return new Definition { File = f, Line = cl.Key, Name = name, Params = ps };
         }
 
         static bool IsDefinitionLine(string line) => Def.IsMatch(line) || MethodDef.IsMatch(line);
 
         // ---------- Magic values ----------
 
-        static IEnumerable<Finding> MagicValues(IList<TextFile> files, Settings s)
+        /// <summary>One use of a literal with a subject: the group it belongs to, the subject as written, and where.</summary>
+        sealed record Use(string Key, string Subject, CodeLocation Location);
+
+        static IEnumerable<Finding> MagicValues(IReadOnlyList<TextFile> files, Settings s)
         {
-            var ignored = new HashSet<string>(s.IgnoredNumbers);
-            var codeLike = new HashSet<string>(s.CodeLikeNames);
-            var platform = new HashSet<string>(s.IgnoredSubjects ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
-            var groups = new Dictionary<string, List<CodeLocation>>();
-            var subjects = new Dictionary<string, string>();
+            var ignored = s.IgnoredNumbers.ToImmutableHashSet();
+            var codeLike = s.CodeLikeNames.ToImmutableHashSet();
+            var platform = (s.IgnoredSubjects ?? ImmutableArray<string>.Empty).ToImmutableHashSet(StringComparer.OrdinalIgnoreCase);
+            return files.SelectMany(f => CodeLines(f).SelectMany(cl => UsesOnLine(f, cl, ignored, codeLike, platform)))
+                .GroupBy(u => u.Key)
+                .Select(g => MagicValue(g.Key, g.First().Subject, g.Select(u => u.Location).ToImmutableArray(), ignored, codeLike))
+                .OfType<Finding>();
+        }
 
-            foreach (var f in files)
+        /// <summary>The literals on a line compared with or assigned to a subject. Each literal counts once: the first pattern that matches it decides.</summary>
+        static IEnumerable<Use> UsesOnLine(TextFile f, KeyValuePair<int, string> cl,
+            ImmutableHashSet<string> ignored, ImmutableHashSet<string> codeLike, ImmutableHashSet<string> platform) =>
+            SubjectThenLiteral.Matches(cl.Value).Cast<Match>()
+                .Concat(LiteralThenSubject.Matches(cl.Value).Cast<Match>())
+                .Concat(Assignment.Matches(cl.Value).Cast<Match>())
+                .GroupBy(m => m.Groups["lit"].Index)
+                .Select(g => UseOf(f, cl, g.First(), ignored, codeLike, platform))
+                .OfType<Use>();
+
+        static Use? UseOf(TextFile f, KeyValuePair<int, string> cl, Match m,
+            ImmutableHashSet<string> ignored, ImmutableHashSet<string> codeLike, ImmutableHashSet<string> platform)
+        {
+            var lit = m.Groups["lit"].Value;
+            var rawSubject = m.Groups["subject"].Value;
+            var subject = SubjectName(rawSubject);
+            // typeof x === "function" and document.readyState === "loading" compare with values the platform defines.
+            if (platform.Contains(subject) || platform.Contains(rawSubject)) return null;
+            var before = cl.Value.Substring(0, m.Groups["subject"].Index).TrimEnd();
+            if (before.EndsWith("typeof", StringComparison.Ordinal)) return null;
+            if (subject.Length == 0 || Keywords.Contains(subject) || subject == "null" || subject == "None" || subject == "nil") return null;
+            bool codeLikeSubject = IsCodeLike(subject, codeLike);
+            bool isString = lit.StartsWith("\"", StringComparison.Ordinal) || lit.StartsWith("'", StringComparison.Ordinal);
+            var op = m.Groups["op"].Value;
+            // Assigning a literal is only interesting when the target holds a code (status = 7), not for every x = 5.
+            if (op == "=" && !codeLikeSubject) return null;
+            if (isString && lit.Length <= 2) return null;
+            // 0, 1, 2... are ordinary numbers unless compared with or assigned to a code.
+            bool commonNumber = !isString && ignored.Contains(lit);
+            if (commonNumber && !(codeLikeSubject && (op == "=" || op == "==" || op == "!=" || op == "===" || op == "!=="))) return null;
+            bool relational = !(op == "==" || op == "!=" || op == "===" || op == "!==" || op == "=");
+            if (isString && relational) return null; // "<" between strings is usually generics or markup, not a comparison
+            var tag = !isString && relational ? "limit" : (isString ? "str" : "num");
+            return new Use(tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant(), subject, Loc(f, cl.Key, "use"));
+        }
+
+        static bool IsCodeLike(string subject, ImmutableHashSet<string> codeLike)
+        {
+            var words = Text.Words(subject);
+            return words.Count > 0 && codeLike.Contains(words[words.Count - 1]);
+        }
+
+        static Finding? MagicValue(string key, string subject, ImmutableArray<CodeLocation> locs, ImmutableHashSet<string> ignored, ImmutableHashSet<string> codeLike)
+        {
+            var parts = key.Split('|');
+            var value = parts[0] == "str" ? "\"" + Text.Quote(parts[1]) + "\"" : parts[1];
+            bool codeSubject = IsCodeLike(subject, codeLike);
+            bool limit = parts[0] == "limit";
+            if (locs.Length < 2 && !(codeSubject && !limit)) return null;
+            if (locs.Length < 2 && parts[0] == "num" && ignored.Contains(parts[1])) return null;
+
+            return new Finding
             {
-                foreach (var cl in CodeLines(f))
-                {
-                    var seen = new HashSet<int>();
-                    var matches = SubjectThenLiteral.Matches(cl.Value).Cast<Match>()
-                        .Concat(LiteralThenSubject.Matches(cl.Value).Cast<Match>())
-                        .Concat(Assignment.Matches(cl.Value).Cast<Match>());
-                    foreach (Match m in matches)
-                    {
-                        var litGroup = m.Groups["lit"];
-                        if (!seen.Add(litGroup.Index)) continue;
-                        var lit = litGroup.Value;
-                        var rawSubject = m.Groups["subject"].Value;
-                        var subject = SubjectName(rawSubject);
-                        // typeof x === "function" and document.readyState === "loading" compare with values the platform defines.
-                        if (platform.Contains(subject) || platform.Contains(rawSubject)) continue;
-                        var before = cl.Value.Substring(0, m.Groups["subject"].Index).TrimEnd();
-                        if (before.EndsWith("typeof", StringComparison.Ordinal)) continue;
-                        if (subject.Length == 0 || Keywords.Contains(subject) || subject == "null" || subject == "None" || subject == "nil") continue;
-                        var subjectWords = Text.Words(subject);
-                        bool codeLikeSubject = subjectWords.Count > 0 && codeLike.Contains(subjectWords[subjectWords.Count - 1]);
-                        bool isString = lit.StartsWith("\"", StringComparison.Ordinal) || lit.StartsWith("'", StringComparison.Ordinal);
-                        var op = m.Groups["op"].Value;
-                        // Assigning a literal is only interesting when the target holds a code (status = 7), not for every x = 5.
-                        if (op == "=" && !codeLikeSubject) continue;
-                        if (isString && lit.Length <= 2) continue;
-                        // 0, 1, 2... are ordinary numbers unless compared with or assigned to a code.
-                        bool commonNumber = !isString && ignored.Contains(lit);
-                        if (commonNumber && !(codeLikeSubject && (op == "=" || op == "==" || op == "!=" || op == "===" || op == "!=="))) continue;
-                        bool relational = !(op == "==" || op == "!=" || op == "===" || op == "!==" || op == "=");
-                        if (isString && relational) continue; // "<" between strings is usually generics or markup, not a comparison
-                        var tag = !isString && relational ? "limit" : (isString ? "str" : "num");
-                        var key = tag + "|" + lit.Trim('"', '\'') + "|" + subject.ToLowerInvariant();
-                        if (!groups.TryGetValue(key, out var list)) { list = new List<CodeLocation>(); groups[key] = list; subjects[key] = subject; }
-                        list.Add(Loc(f, cl.Key, "use"));
-                    }
-                }
-            }
-
-            foreach (var kv in groups)
-            {
-                var locs = kv.Value;
-                var subject = subjects[kv.Key];
-                var parts = kv.Key.Split('|');
-                var value = parts[0] == "str" ? "\"" + Text.Quote(parts[1]) + "\"" : parts[1];
-                var words = Text.Words(subject);
-                bool codeSubject = words.Count > 0 && codeLike.Contains(words[words.Count - 1]);
-                bool limit = parts[0] == "limit";
-                if (locs.Count < 2 && !(codeSubject && !limit)) continue;
-                if (locs.Count < 2 && parts[0] == "num" && ignored.Contains(parts[1])) continue;
-
-                yield return new Finding
-                {
-                    RuleId = limit ? "GNV02" : "GNM01",
-                    Kind = limit ? Kind.Value : Kind.Meaning,
-                    Title = (limit ? "Repeated limit " : "Magic value ") + value,
-                    GroupKey = kv.Key,
-                    Locations = locs,
-                    Degree = locs.Count,
-                    Cause = limit
-                        ? "The limit " + value + " is checked against " + subject + " " + Text.Spread(locs) + ". These checks must stay equal."
-                        : "The value " + value + " is compared with or assigned to " + subject + " " + Text.Spread(locs) + ". Each place has to know what " + value + " means.",
-                    Suggestion = limit
-                        ? "Name the limit once next to the code that owns the rule, and use that name in every check."
-                        : "Give " + value + " a name in one place (an enum or constant) and use the name everywhere.",
-                    ChangeProbe = "If " + value + " changes meaning or value, will " + Text.All(locs.Count, "place") + " be found? Is that plausible?",
-                };
-            }
+                RuleId = limit ? "GNV02" : "GNM01",
+                Kind = limit ? Kind.Value : Kind.Meaning,
+                Title = (limit ? "Repeated limit " : "Magic value ") + value,
+                GroupKey = key,
+                Locations = locs,
+                Degree = locs.Length,
+                Cause = limit
+                    ? "The limit " + value + " is checked against " + subject + " " + Text.Spread(locs) + ". These checks must stay equal."
+                    : "The value " + value + " is compared with or assigned to " + subject + " " + Text.Spread(locs) + ". Each place has to know what " + value + " means.",
+                Suggestion = limit
+                    ? "Name the limit once next to the code that owns the rule, and use that name in every check."
+                    : "Give " + value + " a name in one place (an enum or constant) and use the name everywhere.",
+                ChangeProbe = "If " + value + " changes meaning or value, will " + Text.All(locs.Length, "place") + " be found? Is that plausible?",
+            };
         }
 
         /// <summary>order.status -> status; row["status"] -> status.</summary>
@@ -212,230 +218,216 @@ namespace Connascence.Generic
 
         // ---------- Boolean flags ----------
 
-        static IEnumerable<Finding> BooleanFlags(IList<TextFile> files, IReadOnlyDictionary<string, List<Definition>> defs)
+        /// <summary>Calls to our own functions that pass a bare true/false, grouped by function.</summary>
+        static IEnumerable<Finding> BooleanFlags(IReadOnlyList<TextFile> files, DefinitionIndex defs) =>
+            files.SelectMany(f => CodeLines(f)
+                    .Where(cl => !IsDefinitionLine(cl.Value))
+                    .SelectMany(cl => Call.Matches(cl.Value).Cast<Match>()
+                        .Where(m => !Keywords.Contains(m.Groups["fn"].Value) && defs.ByName.ContainsKey(m.Groups["fn"].Value))
+                        .Where(m => m.Groups["args"].Value.Split(',').Any(a => Bool.IsMatch(a) && !a.Contains("=") && !a.Contains(":")))
+                        .Select(m => (Function: m.Groups["fn"].Value, Location: Loc(f, cl.Key, "call site")))))
+                .GroupBy(x => x.Function, x => x.Location)
+                .Select(g => defs.ByName.TryGetValue(g.Key, out var found) && found.Length > 0 ? BooleanFlag(g.Key, found[0], g.ToImmutableArray()) : null)
+                .OfType<Finding>();
+
+        static Finding BooleanFlag(string fn, Definition def, ImmutableArray<CodeLocation> calls)
         {
-            var groups = new Dictionary<string, List<CodeLocation>>();
-            foreach (var f in files)
+            var locs = calls.Prepend(Loc(def.File, def.Line, "declaration")).ToImmutableArray();
+            return new Finding
             {
-                foreach (var cl in CodeLines(f))
-                {
-                    if (IsDefinitionLine(cl.Value)) continue;
-                    foreach (Match m in Call.Matches(cl.Value))
-                    {
-                        var fn = m.Groups["fn"].Value;
-                        if (Keywords.Contains(fn) || !defs.ContainsKey(fn)) continue;
-                        var args = m.Groups["args"].Value.Split(',');
-                        if (!args.Any(a => Bool.IsMatch(a) && !a.Contains("=") && !a.Contains(":"))) continue;
-                        if (!groups.TryGetValue(fn, out var list)) { list = new List<CodeLocation>(); groups[fn] = list; }
-                        list.Add(Loc(f, cl.Key, "call site"));
-                    }
-                }
-            }
-            foreach (var kv in groups)
-            {
-                var def = defs[kv.Key][0];
-                var locs = new List<CodeLocation> { Loc(def.File, def.Line, "declaration") };
-                locs.AddRange(kv.Value);
-                yield return new Finding
-                {
-                    RuleId = "GNM02",
-                    Kind = Kind.Meaning,
-                    Title = "Boolean flag argument to " + kv.Key,
-                    GroupKey = kv.Key,
-                    Locations = locs,
-                    Degree = kv.Value.Count,
-                    Cause = Text.CountVerb(kv.Value.Count, "caller", "passes", "pass") + " a bare true/false to " + kv.Key + "(). Each caller has to know what it means.",
-                    Suggestion = "Split " + kv.Key + " into two named functions, pass a named option or enum, or use a keyword/named argument.",
-                    ChangeProbe = "If a third option is needed or the flag's meaning changes, every caller must be revisited. Is that plausible?",
-                };
-            }
+                RuleId = "GNM02",
+                Kind = Kind.Meaning,
+                Title = "Boolean flag argument to " + fn,
+                GroupKey = fn,
+                Locations = locs,
+                Degree = calls.Length,
+                Cause = Text.CountVerb(calls.Length, "caller", "passes", "pass") + " a bare true/false to " + fn + "(). Each caller has to know what it means.",
+                Suggestion = "Split " + fn + " into two named functions, pass a named option or enum, or use a keyword/named argument.",
+                ChangeProbe = "If a third option is needed or the flag's meaning changes, every caller must be revisited. Is that plausible?",
+            };
         }
 
         // ---------- Long parameter lists ----------
 
-        static IEnumerable<Finding> LongParameterLists(IList<TextFile> files, IReadOnlyDictionary<string, List<Definition>> defs, Settings s)
+        static IEnumerable<Finding> LongParameterLists(IReadOnlyList<TextFile> files, DefinitionIndex defs, Settings s) =>
+            defs.InOrder
+                .Where(x => x.Definitions.Length == 1) // overloads make call matching unreliable
+                .Select(x => x.Definitions[0])
+                .Where(def => def.Params.Count >= s.MinGenericParameters)
+                .Select(def => LongParameterList(files, def))
+                .OfType<Finding>();
+
+        static Finding? LongParameterList(IReadOnlyList<TextFile> files, Definition def)
         {
-            var callRegexCache = new Dictionary<string, Regex>();
-            foreach (var kv in defs)
+            var rx = new Regex(@"(?<![\w.$])" + Regex.Escape(def.Name) + @"\s*\((?<args>[^()]*)\)");
+            var calls = files.SelectMany(f => CodeLines(f)
+                    .Where(cl => !(f == def.File && cl.Key == def.Line))
+                    .SelectMany(cl => rx.Matches(cl.Value).Cast<Match>()
+                        .Select(m => m.Groups["args"].Value.Split(','))
+                        .Where(args => args.Length >= 2 && !args.Skip(1).All(a => a.Contains("=") || a.Contains(":"))) // not all named
+                        .Select(_ => Loc(f, cl.Key, "call site"))))
+                .ToImmutableArray();
+            if (calls.IsEmpty) return null;
+            var locs = calls.Prepend(Loc(def.File, def.Line, "declaration")).ToImmutableArray();
+            return new Finding
             {
-                var def = kv.Value.FirstOrDefault(d => d.Params.Count >= s.MinGenericParameters);
-                if (def == null || kv.Value.Count > 1) continue; // overloads make call matching unreliable
-                var rx = new Regex(@"(?<![\w.$])" + Regex.Escape(kv.Key) + @"\s*\((?<args>[^()]*)\)");
-                var calls = new List<CodeLocation>();
-                foreach (var f in files)
-                    foreach (var cl in CodeLines(f))
-                    {
-                        if (f == def.File && cl.Key == def.Line) continue;
-                        foreach (Match m in rx.Matches(cl.Value))
-                        {
-                            var args = m.Groups["args"].Value.Split(',');
-                            if (args.Length < 2) continue;
-                            if (args.Skip(1).All(a => a.Contains("=") || a.Contains(":"))) continue; // all named
-                            calls.Add(Loc(f, cl.Key, "call site"));
-                        }
-                    }
-                if (calls.Count == 0) continue;
-                var locs = new List<CodeLocation> { Loc(def.File, def.Line, "declaration") };
-                locs.AddRange(calls);
-                yield return new Finding
-                {
-                    RuleId = "GNP01",
-                    Kind = Kind.Position,
-                    Title = kv.Key + " takes " + def.Params.Count + " parameters by position",
-                    GroupKey = kv.Key,
-                    Locations = locs,
-                    Degree = calls.Count,
-                    Cause = kv.Key + " takes " + def.Params.Count + " parameters and " + Text.CountVerb(calls.Count, "caller", "passes", "pass") + " them by position. Swapping two of them may not be caught.",
-                    Suggestion = "Group related parameters into one object or record, or use named/keyword arguments at every call.",
-                    ChangeProbe = "If a parameter is added, removed or reordered, every positional caller must change in step. Is that likely?",
-                };
-            }
+                RuleId = "GNP01",
+                Kind = Kind.Position,
+                Title = def.Name + " takes " + def.Params.Count + " parameters by position",
+                GroupKey = def.Name,
+                Locations = locs,
+                Degree = calls.Length,
+                Cause = def.Name + " takes " + def.Params.Count + " parameters and " + Text.CountVerb(calls.Length, "caller", "passes", "pass") + " them by position. Swapping two of them may not be caught.",
+                Suggestion = "Group related parameters into one object or record, or use named/keyword arguments at every call.",
+                ChangeProbe = "If a parameter is added, removed or reordered, every positional caller must change in step. Is that likely?",
+            };
         }
 
         // ---------- Duplicate blocks ----------
 
-        static IEnumerable<Finding> DuplicateBlocks(IList<TextFile> files, Settings s)
+        /// <summary>A file's significant lines (normalised, with their line index) and the text of each window of k of them.</summary>
+        sealed record Windows(TextFile File, ImmutableArray<KeyValuePair<int, string>> Lines, ImmutableArray<string> Keys);
+
+        /// <summary>Where a window starts: the file and its index into the file's significant lines.</summary>
+        readonly record struct At(Windows Source, int Index);
+
+        static IEnumerable<Finding> DuplicateBlocks(IReadOnlyList<TextFile> files, Settings s)
         {
             int k = Math.Max(3, s.MinDuplicateLinesGeneric);
-            var norm = new Dictionary<TextFile, List<KeyValuePair<int, string>>>();
-            foreach (var f in files)
-            {
-                norm[f] = CodeLines(f)
-                    .Select(cl => new KeyValuePair<int, string>(cl.Key, Regex.Replace(cl.Value.Trim(), @"\s+", " ")))
-                    .Where(cl => cl.Value.Length > 3 && !Regex.IsMatch(cl.Value, @"^(import|using|#include|from|package|require|use)\b") && cl.Value.Trim('{', '}', '(', ')', ';', ' ', ']', '[', ',').Length > 0)
-                    .ToList();
-            }
+            var sources = files.Select(f => WindowsOf(f, k)).ToImmutableArray();
+            var windows = sources
+                .SelectMany(src => src.Keys.Select((key, i) => (Key: key, At: new At(src, i))))
+                .GroupBy(x => x.Key, x => x.At)
+                .ToImmutableDictionary(g => g.Key, g => g.ToImmutableArray());
 
-            var windows = new Dictionary<string, List<KeyValuePair<TextFile, int>>>(); // hash -> (file, index into norm list)
-            var hashAt = new Dictionary<TextFile, string[]>();
-            foreach (var f in files)
-            {
-                var ls = norm[f];
-                var hashes = new string[Math.Max(0, ls.Count - k + 1)];
-                for (int i = 0; i + k <= ls.Count; i++)
+            // Walk every window in file order. A window already inside a reported copy is skipped, so each copy is reported once, at its longest.
+            return sources.SelectMany(src => src.Keys.Select((key, i) => (Key: key, At: new At(src, i))))
+                .Aggregate((Covered: ImmutableHashSet<string>.Empty, Found: ImmutableList<Finding>.Empty), (state, w) =>
                 {
-                    var key = string.Join("\n", ls.Skip(i).Take(k).Select(x => x.Value).ToArray());
-                    hashes[i] = key;
-                    if (!windows.TryGetValue(key, out var list)) { list = new List<KeyValuePair<TextFile, int>>(); windows[key] = list; }
-                    list.Add(new KeyValuePair<TextFile, int>(f, i));
-                }
-                hashAt[f] = hashes;
-            }
+                    if (!windows.TryGetValue(w.Key, out var occ) || occ.Length < 2 || state.Covered.Contains(w.At.Source.File.RelativePath + "#" + w.At.Index)) return state;
+                    var distinct = NonOverlapping(occ, k);
+                    if (distinct.Count < 2) return state;
+                    var len = k + Enumerable.Range(1, int.MaxValue - 1).TakeWhile(offset => AllContinue(distinct, offset)).Count();
+                    var covered = state.Covered.Union(distinct.SelectMany(o =>
+                        Enumerable.Range(o.Index, len - k + 1).Select(j => o.Source.File.RelativePath + "#" + j)));
+                    return (covered, state.Found.Add(CopiedBlock(w.Key, distinct, len)));
+                })
+                .Found;
+        }
 
-            var covered = new HashSet<string>();
-            foreach (var f in files)
+        static Windows WindowsOf(TextFile f, int k)
+        {
+            var lines = CodeLines(f)
+                .Select(cl => new KeyValuePair<int, string>(cl.Key, Regex.Replace(cl.Value.Trim(), @"\s+", " ")))
+                .Where(cl => cl.Value.Length > 3 && !Regex.IsMatch(cl.Value, @"^(import|using|#include|from|package|require|use)\b") && cl.Value.Trim('{', '}', '(', ')', ';', ' ', ']', '[', ',').Length > 0)
+                .ToImmutableArray();
+            var keys = Enumerable.Range(0, Math.Max(0, lines.Length - k + 1))
+                .Select(i => string.Join("\n", lines.Skip(i).Take(k).Select(x => x.Value).ToArray()))
+                .ToImmutableArray();
+            return new Windows(f, lines, keys);
+        }
+
+        /// <summary>The occurrences in file and line order, dropping any that overlap an earlier one in the same file.</summary>
+        static ImmutableList<At> NonOverlapping(ImmutableArray<At> occ, int k) =>
+            occ.OrderBy(o => o.Source.File.RelativePath, StringComparer.Ordinal).ThenBy(o => o.Index)
+                .Aggregate(ImmutableList<At>.Empty, (kept, o) =>
+                    kept.Any(d => d.Source == o.Source && Math.Abs(d.Index - o.Index) < k) ? kept : kept.Add(o));
+
+        /// <summary>True when every copy's window <paramref name="offset"/> steps further on is the same text: the copies continue.</summary>
+        static bool AllContinue(ImmutableList<At> copies, int offset)
+        {
+            var next = copies.Select(o => o.Index + offset < o.Source.Keys.Length ? o.Source.Keys[o.Index + offset] : null).ToImmutableArray();
+            return !next.Any(n => n == null) && next.Distinct().Count() == 1;
+        }
+
+        static Finding CopiedBlock(string key, ImmutableList<At> distinct, int len)
+        {
+            var locs = distinct.Select(o => Loc(o.Source.File, o.Source.Lines[o.Index].Key, "copy") with { EndLine = o.Source.Lines[o.Index + len - 1].Key + 1 })
+                .ToImmutableArray();
+            return new Finding
             {
-                for (int i = 0; i < hashAt[f].Length; i++)
-                {
-                    var key = hashAt[f][i];
-                    var occ = windows[key];
-                    if (occ.Count < 2 || covered.Contains(f.RelativePath + "#" + i)) continue;
-                    // Drop overlapping occurrences in the same file.
-                    var distinct = new List<KeyValuePair<TextFile, int>>();
-                    foreach (var o in occ.OrderBy(o => o.Key.RelativePath, StringComparer.Ordinal).ThenBy(o => o.Value))
-                        if (!distinct.Any(d => d.Key == o.Key && Math.Abs(d.Value - o.Value) < k)) distinct.Add(o);
-                    if (distinct.Count < 2) continue;
-
-                    // Extend the duplicate while every copy keeps matching.
-                    int len = k;
-                    while (true)
-                    {
-                        var next = distinct.Select(o => o.Value + len - k + 1 < hashAt[o.Key].Length ? hashAt[o.Key][o.Value + len - k + 1] : null).ToList();
-                        if (next.Any(n => n == null) || next.Distinct().Count() != 1) break;
-                        len++;
-                    }
-                    foreach (var o in distinct)
-                        for (int j = o.Value; j <= o.Value + len - k; j++) covered.Add(o.Key.RelativePath + "#" + j);
-
-                    var locs = distinct.Select(o => Loc(o.Key, norm[o.Key][o.Value].Key, "copy") with { EndLine = norm[o.Key][o.Value + len - 1].Key + 1 })
-                        .ToList();
-                    yield return new Finding
-                    {
-                        RuleId = "GNA01",
-                        Kind = Kind.Algorithm,
-                        Title = len + " lines copied " + distinct.Count + " times",
-                        GroupKey = Text.StableHash(key) + "|" + len,
-                        Locations = locs,
-                        Degree = distinct.Count,
-                        Cause = "The same " + len + " lines of code appear " + Text.Spread(locs) + ". If the logic changes, every copy must change the same way.",
-                        Suggestion = "Move the logic into one function, owned by the concept it belongs to, and call it from each place.",
-                        ChangeProbe = "If this logic changes, will every copy be found? Is it likely to change?",
-                    };
-                }
-            }
+                RuleId = "GNA01",
+                Kind = Kind.Algorithm,
+                Title = len + " lines copied " + distinct.Count + " times",
+                GroupKey = Text.StableHash(key) + "|" + len,
+                Locations = locs,
+                Degree = distinct.Count,
+                Cause = "The same " + len + " lines of code appear " + Text.Spread(locs) + ". If the logic changes, every copy must change the same way.",
+                Suggestion = "Move the logic into one function, owned by the concept it belongs to, and call it from each place.",
+                ChangeProbe = "If this logic changes, will every copy be found? Is it likely to change?",
+            };
         }
 
         // ---------- Timing ----------
 
-        static IEnumerable<Finding> Sleeps(IList<TextFile> files)
+        static IEnumerable<Finding> Sleeps(IReadOnlyList<TextFile> files) =>
+            files.SelectMany(f => CodeLines(f)
+                .Where(cl => !IsDefinitionLine(cl.Value))
+                .Select(cl => (Line: cl, Title: WaitTitle(cl.Value)))
+                .Where(x => x.Title != null)
+                .Select(x => FixedWait(f, x.Line, x.Title!)));
+
+        /// <summary>How a fixed wait on this line reads in a title, such as "time.sleep(2)", or null if there is none.</summary>
+        static string? WaitTitle(string line)
         {
-            foreach (var f in files)
-                foreach (var cl in CodeLines(f))
-                {
-                    if (IsDefinitionLine(cl.Value)) continue;
-                    var m = Sleep.Match(cl.Value);
-                    string? title = null;
-                    if (m.Success) title = m.Groups["call"].Value + "(" + Text.Quote(m.Groups["args"].Value) + ")";
-                    else
-                    {
-                        var t = TimerCall.Match(cl.Value);   // setTimeout(() => refresh(), 3000): the callback holds brackets
-                        if (t.Success) title = t.Groups["call"].Value + "(..., " + t.Groups["ms"].Value + ")";
-                    }
-                    if (title == null) continue;
-                    var loc = Loc(f, cl.Key, "wait");
-                    yield return new Finding
-                    {
-                        RuleId = "GNT01",
-                        Kind = Kind.Timing,
-                        Title = title,
-                        GroupKey = loc.File + "|" + cl.Value.Trim(),
-                        Locations = new List<CodeLocation> { loc },
-                        Degree = 1,
-                        FixedDistance = Distance.SameProject,
-                        Cause = "This waits a fixed time, assuming other work will be done by then.",
-                        Suggestion = "Wait for the real event (a promise, future, channel or condition with a timeout). Keep any retry timings in one policy.",
-                        ChangeProbe = "If the other side gets slower, does this break? Is that likely?",
-                    };
-                }
+            var m = Sleep.Match(line);
+            if (m.Success) return m.Groups["call"].Value + "(" + Text.Quote(m.Groups["args"].Value) + ")";
+            var t = TimerCall.Match(line);   // setTimeout(() => refresh(), 3000): the callback holds brackets
+            return t.Success ? t.Groups["call"].Value + "(..., " + t.Groups["ms"].Value + ")" : null;
+        }
+
+        static Finding FixedWait(TextFile f, KeyValuePair<int, string> cl, string title)
+        {
+            var loc = Loc(f, cl.Key, "wait");
+            return new Finding
+            {
+                RuleId = "GNT01",
+                Kind = Kind.Timing,
+                Title = title,
+                GroupKey = loc.File + "|" + cl.Value.Trim(),
+                Locations = ImmutableArray.Create(loc),
+                Degree = 1,
+                FixedDistance = Distance.SameProject,
+                Cause = "This waits a fixed time, assuming other work will be done by then.",
+                Suggestion = "Wait for the real event (a promise, future, channel or condition with a timeout). Keep any retry timings in one policy.",
+                ChangeProbe = "If the other side gets slower, does this break? Is that likely?",
+            };
         }
 
         // ---------- Globals ----------
 
-        static IEnumerable<Finding> Globals(IList<TextFile> files)
+        /// <summary>Python `global x` declarations and Ruby $x writes, per project and name, where there are two or more.</summary>
+        static IEnumerable<Finding> Globals(IReadOnlyList<TextFile> files) =>
+            files.SelectMany(f => CodeLines(f).SelectMany(cl => GlobalWrites(f, cl)))
+                .GroupBy(x => x.Key, x => x.Location)
+                .Select(g => g.ToImmutableArray() is var locs && locs.Length >= 2 ? Global(g.Key, locs) : null)
+                .OfType<Finding>();
+
+        static IEnumerable<(string Key, CodeLocation Location)> GlobalWrites(TextFile f, KeyValuePair<int, string> cl)
         {
-            var groups = new Dictionary<string, List<CodeLocation>>();
-            foreach (var f in files)
-                foreach (var cl in CodeLines(f))
-                {
-                    var pg = PyGlobal.Match(cl.Value);
-                    if (pg.Success)
-                        foreach (var n in pg.Groups["names"].Value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0))
-                            Add(groups, f.Project + "|" + n, Loc(f, cl.Key, "writes global"));
-                    foreach (Match rg in RubyGlobal.Matches(cl.Value))
-                        Add(groups, f.Project + "|$" + rg.Groups["name"].Value, Loc(f, cl.Key, "writes global"));
-                }
-            foreach (var kv in groups.Where(g => g.Value.Count >= 2))
-            {
-                var name = kv.Key.Split('|')[1];
-                yield return new Finding
-                {
-                    RuleId = "GNI01",
-                    Kind = Kind.Identity,
-                    Title = "Global " + name + " changed in " + kv.Value.Count + " places",
-                    GroupKey = kv.Key,
-                    Locations = kv.Value,
-                    Degree = kv.Value.Count,
-                    Cause = "The global " + name + " is changed " + Text.Spread(kv.Value) + ". These places all depend on the same shared value and on each other's changes.",
-                    Suggestion = "Give the state one owner (an object passed to whoever needs it), or return new values instead of changing a global.",
-                    ChangeProbe = "If you need two of these, or run things in parallel, every place must change. Is that plausible?",
-                };
-            }
+            var pg = PyGlobal.Match(cl.Value);
+            var python = pg.Success
+                ? pg.Groups["names"].Value.Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).Select(n => f.Project + "|" + n)
+                : Enumerable.Empty<string>();
+            var ruby = RubyGlobal.Matches(cl.Value).Cast<Match>().Select(rg => f.Project + "|$" + rg.Groups["name"].Value);
+            return python.Concat(ruby).Select(key => (key, Loc(f, cl.Key, "writes global")));
         }
 
-        static void Add(Dictionary<string, List<CodeLocation>> g, string key, CodeLocation l)
+        static Finding Global(string key, ImmutableArray<CodeLocation> locs)
         {
-            if (!g.TryGetValue(key, out var list)) { list = new List<CodeLocation>(); g[key] = list; }
-            list.Add(l);
+            var name = key.Split('|')[1];
+            return new Finding
+            {
+                RuleId = "GNI01",
+                Kind = Kind.Identity,
+                Title = "Global " + name + " changed in " + locs.Length + " places",
+                GroupKey = key,
+                Locations = locs,
+                Degree = locs.Length,
+                Cause = "The global " + name + " is changed " + Text.Spread(locs) + ". These places all depend on the same shared value and on each other's changes.",
+                Suggestion = "Give the state one owner (an object passed to whoever needs it), or return new values instead of changing a global.",
+                ChangeProbe = "If you need two of these, or run things in parallel, every place must change. Is that plausible?",
+            };
         }
     }
 }
