@@ -37,7 +37,6 @@ namespace Connascence.Cli
 
             // Pairs linked by a finding, with the finding's cost.
             var linked = new Dictionary<string, double>();
-            var linkedKind = new Dictionary<string, Kind>();
             foreach (var f in r.Findings)
             {
                 var files = f.Files.OrderBy(x => x, StringComparer.Ordinal).ToList();
@@ -46,7 +45,7 @@ namespace Connascence.Cli
                     {
                         var key = files[i] + "\n" + files[j];
                         double cur; linked.TryGetValue(key, out cur);
-                        if (f.Cost > cur) { linked[key] = f.Cost; linkedKind[key] = f.Kind; }
+                        if (f.Cost > cur) linked[key] = f.Cost;
                     }
             }
             if (linked.Count == 0) { Console.WriteLine("No findings span more than one file, so there is nothing to compare with git history."); return 0; }
@@ -67,22 +66,48 @@ namespace Connascence.Cli
             var randomRate = Rate(random);
             Console.WriteLine("Calibration over " + commits.Count + " commits in the last " + months + " months");
             Console.WriteLine();
-            Console.WriteLine("File pairs linked by a finding that changed together at least once: " + linkedRate.ToString("0.0") + "% of " + linked.Count);
-            Console.WriteLine("Random file pairs that changed together at least once:              " + randomRate.ToString("0.0") + "% of " + random.Count);
+            Console.WriteLine("File pairs linked by a finding that changed together at least once: " + Percent(linkedRate) + " of " + linked.Count);
+            Console.WriteLine("Random file pairs that changed together at least once:              " + Percent(randomRate) + " of " + random.Count);
             var lift = randomRate > 0 ? linkedRate / randomRate : double.NaN;
-            Console.WriteLine("Lift: " + (double.IsNaN(lift) ? "n/a" : lift.ToString("0.0") + "x"));
-            Console.WriteLine();
-            Console.WriteLine("By kind:");
-            foreach (var g in linked.Keys.GroupBy(k => linkedKind[k]).OrderBy(g => (int)g.Key))
-                Console.WriteLine("  " + g.Key.ToString().PadRight(10) + Rate(g).ToString("0.0").PadLeft(6) + "% of " + g.Count() + " pairs");
+            Console.WriteLine("Lift: " + (double.IsNaN(lift) ? "n/a" : Number(lift) + "x"));
 
-            var costly = linked.Where(p => p.Value >= config.Thresholds.MaxFindingCost).Select(p => p.Key).ToList();
-            if (costly.Count > 0)
-                Console.WriteLine("Findings at or above the gate (" + config.Thresholds.MaxFindingCost + "): " + Rate(costly).ToString("0.0") + "% of " + costly.Count + " pairs");
+            // Per finding: of the findings whose files changed at all, how many had two of their files change in the same
+            // commit. Counting findings rather than pairs keeps large findings (which make many pairs) from looking worse.
+            var changedFiles = new HashSet<string>(commits.SelectMany(c => c));
+            var outcomes = r.Findings.Where(f => f.Files.Count() > 1 && f.Files.Any(changedFiles.Contains)).Select(f =>
+            {
+                var files = f.Files.OrderBy(x => x, StringComparer.Ordinal).ToList();
+                bool together = false;
+                for (int i = 0; i < files.Count && !together; i++)
+                    for (int j = i + 1; j < files.Count && !together; j++)
+                        together = pairCounts.ContainsKey(files[i] + "\n" + files[j]);
+                return new { Finding = f, Together = together };
+            }).ToList();
+            Console.WriteLine();
+            if (outcomes.Count == 0)
+                Console.WriteLine("None of the multi-file findings' files changed in this window.");
+            else
+            {
+                string Line(string label, IEnumerable<bool> together)
+                {
+                    var l = together.ToList();
+                    return "  " + label.PadRight(26) + Percent(100.0 * l.Count(t => t) / l.Count).PadLeft(7) + " of " + l.Count;
+                }
+                Console.WriteLine("Findings whose files changed, and that had two of their files change in the same commit:");
+                Console.WriteLine(Line("All", outcomes.Select(o => o.Together)));
+                foreach (var g in outcomes.GroupBy(o => o.Finding.Kind).OrderBy(g => (int)g.Key))
+                    Console.WriteLine(Line(g.Key.ToString(), g.Select(o => o.Together)));
+                var gate = config.Thresholds.MaxFindingCost;
+                var below = outcomes.Where(o => o.Finding.Cost < gate).Select(o => o.Together).ToList();
+                var above = outcomes.Where(o => o.Finding.Cost >= gate).Select(o => o.Together).ToList();
+                if (below.Count > 0) Console.WriteLine(Line("Below the gate (< " + gate + ")", below));
+                if (above.Count > 0) Console.WriteLine(Line("At or above the gate", above));
+            }
 
             Console.WriteLine();
             Console.WriteLine("How to read this: a lift well above 1 means findings point at code that really does change together.");
-            Console.WriteLine("If a kind sits near the random rate, lower its strength in .connascence.json, or its detector is too noisy.");
+            Console.WriteLine("If a kind's findings rarely change together, lower its strength in .connascence.json, or its detector is too noisy.");
+            Console.WriteLine("Changing together shows how often coupling bites, not how bad a missed edit is, which is what strength measures.");
 
             var hidden = pairCounts.Where(p => p.Value >= 3 && !linked.ContainsKey(p.Key)).OrderByDescending(p => p.Value).Take(10).ToList();
             if (hidden.Count > 0)
@@ -93,5 +118,9 @@ namespace Connascence.Cli
             }
             return 0;
         }
+
+        static string Number(double value) => value.ToString("0.0");
+
+        static string Percent(double value) => Number(value) + "%";
     }
 }
