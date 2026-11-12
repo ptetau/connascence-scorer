@@ -1,0 +1,92 @@
+{
+  "skill": "connascence-futures-interview",
+  "description": "Interview a simulated owner (owner.md) reachable only through ask-owner. The owner says yes to Australia, accountant logins and partially paid invoices; maybe to Stripe; no to multiple instances and a database change. Bank files are stable.",
+  "futures": null,
+  "owner": "owner.md",
+  "prompt": "Let's ground the connascence review in my real roadmap. Run the connascence-futures-interview skill with me.",
+  "checks": [
+    {
+      "type": "skill_used",
+      "label": "used the interview skill",
+      "skill": "connascence-futures-interview"
+    },
+    {
+      "type": "owner_calls",
+      "label": "a short interview (3-7 exchanges)",
+      "min": 3,
+      "max": 7
+    },
+    {
+      "type": "futures_valid",
+      "label": "well-formed futures",
+      "min": 4,
+      "max": 20
+    },
+    {
+      "type": "futures_sources",
+      "label": "interview and derived futures",
+      "allowed": [
+        "interview",
+        "derived"
+      ],
+      "require": [
+        "interview",
+        "derived"
+      ]
+    },
+    {
+      "type": "derived_parents",
+      "label": "every derived future names its parent"
+    },
+    {
+      "type": "futures_mention",
+      "label": "Australia rated high",
+      "pattern": "(?i)austral|\\bAUD\\b",
+      "likelihood": [
+        "high"
+      ]
+    },
+    {
+      "type": "futures_mention",
+      "label": "accountant logins rated high",
+      "pattern": "(?i)accountant",
+      "likelihood": [
+        "high"
+      ]
+    },
+    {
+      "type": "futures_mention",
+      "label": "partially paid invoices",
+      "pattern": "(?i)partial"
+    },
+    {
+      "type": "futures_absent",
+      "label": "no multi-instance future (owner said no)",
+      "pattern": "(?i)multi-?instance|load.?balanc|more than one (instance|server)|scale.?out|horizontal"
+    },
+    {
+      "type": "futures_absent",
+      "label": "no database change future (owner said no)",
+      "pattern": "(?i)postgres|database.?agnostic|second (database|store)|another database"
+    },
+    {
+      "type": "stable_mention",
+      "label": "bank direct-credit export marked stable",
+      "pattern": "(?i)bank|BankFile|direct.?credit"
+    },
+    {
+      "type": "file_exists",
+      "label": "interview notes saved with the date",
+      "path": ".connascence/futures-interview.md",
+      "pattern": "20\\d\\d"
+    }
+  ],
+  "rubric": [
+    "Prepared before asking: its questions referred to Tally's specifics (NZ GST, Windcave, one VM, the bank files), not generic ones.",
+    "Kept it short: about four rounds of one to four questions, each with a suggested option so the owner could answer fast.",
+    "Respected the owner's 'no' answers: no futures for multiple instances or a database change.",
+    "Expanded the likely items into sensible derived futures (for example accountant logins into roles, per-client access checks, audit), each naming its parent.",
+    "Confirmed the list with the owner once before writing it.",
+    "Saved the interview notes in the owner's words with the date, and pointed to the review skill as the next step."
+  ]
+}

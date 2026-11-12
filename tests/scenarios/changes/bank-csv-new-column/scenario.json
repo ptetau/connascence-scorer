@@ -1,0 +1,9 @@
+{
+  "description": "The bank inserts a 'Particulars' column before Payee in its statement CSV. Every index after it shifts by one.",
+  "fixture": "tally",
+  "edits": [
+    { "file": "Tally.Billing/BankFile.cs", "old": "Payee = parts[2].Trim(),", "new": "Payee = parts[3].Trim()," },
+    { "file": "Tally.Billing/BankFile.cs", "old": "Reference = parts[4].Trim(),", "new": "Reference = parts[5].Trim()," }
+  ],
+  "predictedBy": [ { "rule": "CNP03", "titleContains": "parts" } ]
+}

@@ -1,0 +1,22 @@
+{
+  "description": "A future's keywords tag the findings that are about that thing, not every finding with the word somewhere on one of its lines. Over-tagging inflates priorities and points reviews at the wrong findings.",
+  "fixture": "tally",
+  "futures": {
+    "product": "Tally",
+    "futures": [
+      { "id": "F1", "title": "Invoice statuses grow", "likelihood": "high", "source": "interview", "keywords": ["Status"] },
+      { "id": "F2", "title": "Second payment provider", "likelihood": "medium", "source": "interview", "keywords": ["PaymentGateway"] },
+      { "id": "F3", "title": "Shared invoice store", "likelihood": "medium", "source": "interview", "keywords": ["InvoiceCache"] },
+      { "id": "F4", "title": "Card payments rework", "likelihood": "medium", "source": "interview", "keywords": ["Pay"] }
+    ]
+  },
+  "expect": [
+    { "rule": "CNM01", "groupKey": "num|3|status", "future": "F1", "why": "the coupling is about Status" },
+    { "rule": "CNE01", "titleContains": "Connect", "future": "F2", "why": "the type name matches" },
+    { "rule": "CNI01", "titleContains": "InvoiceCache", "future": "F3", "why": "the finding is about InvoiceCache" }
+  ],
+  "forbid": [
+    { "rule": "CNI01", "titleContains": "InvoiceCache", "future": "F1", "why": "only 2 of its 9 places mention Status, incidentally, on a line that also reads the cache" },
+    { "rule": "CNP03", "titleContains": "parts", "future": "F4", "why": "'Pay' is not a word in 'Payee'" }
+  ]
+}

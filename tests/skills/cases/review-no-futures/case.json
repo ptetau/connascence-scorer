@@ -1,0 +1,60 @@
+{
+  "skill": "connascence-review",
+  "description": "The repo was just initialised: futures.json only holds the init template's example. The user asks for a review only. Expected: notice the futures are a placeholder and generate them (explore skill) or say plainly that decisions would be guesses; review without committing. Review only, so no source changes.",
+  "futures": null,
+  "agentsSnippet": true,
+  "stage": true,
+  "writes": [
+    {
+      "file": "Tally.Api/RemindersController.cs",
+      "content": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing Tally.Billing;\nusing Tally.Domain;\n\nnamespace Tally.Api\n{\n    // Lists invoices that need a reminder.\n    public class RemindersController\n    {\n        public IEnumerable<Invoice> DueToday(DateTime today)\n        {\n            return InvoiceCache.Items.Values.Where(i => i.Status == 3 && i.Due.Date == today.Date);\n        }\n\n        public IEnumerable<Invoice> Overdue()\n        {\n            return InvoiceCache.Items.Values.Where(i => i.Status == 5);\n        }\n    }\n}\n"
+    }
+  ],
+  "prompt": "Before I commit: review the staged reminders endpoint for coupling problems. Don't commit anything yet.",
+  "checks": [
+    {
+      "type": "command_ran",
+      "label": "ran the connascence tool",
+      "pattern": "connascence (check|analyze|decide)|git commit"
+    },
+    {
+      "type": "skill_used",
+      "label": "used the review skill",
+      "skill": "connascence-review"
+    },
+    {
+      "type": "any_of",
+      "label": "replaced the placeholder futures, or flagged that they are missing",
+      "checks": [
+        {
+          "type": "futures_valid",
+          "min": 3,
+          "max": 15
+        },
+        {
+          "type": "final_mentions",
+          "pattern": "(?i)(futures?[^.\\n]{0,60}(missing|placeholder|template|example|stale|not (yet )?(written|real|defined)))|(no (real )?futures)|((only|just) (an |the )?example)"
+        }
+      ]
+    },
+    {
+      "type": "not_committed",
+      "label": "did not commit, as asked"
+    },
+    {
+      "type": "untouched",
+      "label": "left source code alone (review only)",
+      "patterns": [
+        "^Tally\\.",
+        "^web/",
+        "^scripts/"
+      ]
+    }
+  ],
+  "rubric": [
+    "Noticed that futures.json only holds the init template's example future and said that without real futures the refactor-or-accept calls are guesses.",
+    "Generated futures with the explore skill (or proposed to, if it judged that out of scope) before deciding the findings.",
+    "Did not commit, and did not change source code or log decisions: it recommended them for the user to approve.",
+    "Gave a clear, short review: each finding the change adds or grows, the recommended decision, and why, tied to plausible changes."
+  ]
+}

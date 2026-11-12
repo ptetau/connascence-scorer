@@ -1,0 +1,4 @@
+{
+  "description": "One status code used as a switch case, a switch-expression arm and a comparison: all one meaning.",
+  "expect": [ { "rule": "CNM01", "groupKeyStartsWith": "num|7|", "minDegree": 3, "why": "case 7, 7 =>, and == 7 all mean 'blocked'" } ]
+}

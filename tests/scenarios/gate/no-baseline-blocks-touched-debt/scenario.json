@@ -1,0 +1,9 @@
+{
+  "description": "Without a baseline, every costly finding counts as new. Touching a file that holds existing debt blocks the commit. This is why the README says to run `baseline` after `init`.",
+  "fixture": "tally",
+  "steps": [
+    { "replace": "Tally.Api/CustomersController.cs", "old": "Your first invoice is on us.", "new": "Send your first invoice in under a minute." },
+    { "stage": true },
+    { "label": "check --staged fails on old debt in the touched file", "run": ["check", "--staged"], "exit": 1, "contains": ["MaxNameLength"] }
+  ]
+}

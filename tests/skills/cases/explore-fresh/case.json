@@ -1,0 +1,75 @@
+{
+  "skill": "connascence-futures-explore",
+  "description": "A freshly initialised repo with only the template future. The README lists four roadmap items and says the bank file layouts are fixed. Expected: 5-15 grounded futures, roadmap items rated high, the bank files marked stable, every future tied to code.",
+  "futures": null,
+  "baseline": true,
+  "prompt": "Use the connascence-futures-explore skill to write the likely futures for this repo.",
+  "checks": [
+    {
+      "type": "skill_used",
+      "label": "used the explore skill",
+      "skill": "connascence-futures-explore"
+    },
+    {
+      "type": "futures_valid",
+      "label": "5-15 well-formed futures, template example removed"
+    },
+    {
+      "type": "futures_sources",
+      "label": "all marked source: explore",
+      "allowed": [
+        "explore"
+      ]
+    },
+    {
+      "type": "futures_touch_code",
+      "label": "most futures touch a finding (or say they're new code)",
+      "minShare": 0.6
+    },
+    {
+      "type": "futures_mention",
+      "label": "Australia / GST / AUD, rated high",
+      "pattern": "(?i)austral|\\bAUD\\b|currenc|tax (rate|regime)|GST rate",
+      "likelihood": [
+        "high"
+      ]
+    },
+    {
+      "type": "futures_mention",
+      "label": "second payment provider",
+      "pattern": "(?i)stripe|second payment|payment provider"
+    },
+    {
+      "type": "futures_mention",
+      "label": "accountant / team access",
+      "pattern": "(?i)accountant|team|roles?\\b|permission|multi-user"
+    },
+    {
+      "type": "futures_mention",
+      "label": "partially paid / statuses grow",
+      "pattern": "(?i)partial|statuses"
+    },
+    {
+      "type": "stable_mention",
+      "label": "bank file formats marked stable",
+      "pattern": "(?i)bank|BankFile|direct.?credit"
+    },
+    {
+      "type": "command_ran",
+      "label": "checked the result with connascence futures",
+      "pattern": "connascence futures"
+    },
+    {
+      "type": "command_ran",
+      "label": "looked at git history",
+      "pattern": "git log"
+    }
+  ],
+  "rubric": [
+    "Read the README, the code layout and the git history before writing, and gave a short 'today' summary with its assumptions.",
+    "Every roadmap item in the README became a future rated high, or it explained why not.",
+    "The futures are boring, predictable changes for a small invoicing app at this stage; nothing exotic without a signal in the repo.",
+    "Each future names concrete areas and/or keywords that pick out the code it would touch.",
+    "Showed the user the list and assumptions, and suggested the interview skill to sharpen it."
+  ]
+}

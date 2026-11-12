@@ -1,0 +1,31 @@
+{
+  "description": "Copied business rules are found; tiny look-alike helpers are not.",
+  "expect": [
+    {
+      "rule": "CNA01",
+      "members": [
+        "Commission",
+        "CommissionFor"
+      ],
+      "distance": "CrossProject",
+      "why": "Commission copied verbatim into another project"
+    },
+    {
+      "rule": "CNA01",
+      "members": [
+        "Bonus",
+        "BonusFor"
+      ],
+      "why": "Bonus copied with the variables renamed"
+    }
+  ],
+  "forbid": [
+    {
+      "rule": "CNA01",
+      "members": [
+        "Initials"
+      ],
+      "why": "three-statement helper is below the copy threshold"
+    }
+  ]
+}

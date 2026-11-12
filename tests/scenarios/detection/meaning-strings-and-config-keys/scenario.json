@@ -1,0 +1,7 @@
+{
+  "description": "A role string and a config key repeated across two projects.",
+  "expect": [
+    { "rule": "CNM01", "titleContains": "\"admin\"", "degree": 2, "distance": "CrossProject" },
+    { "rule": "CNM01", "titleContains": "Smtp:Host", "degree": 2, "distance": "CrossProject", "why": "config key read in two places" }
+  ]
+}

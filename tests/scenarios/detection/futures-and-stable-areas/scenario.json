@@ -1,0 +1,19 @@
+{
+  "description": "Futures tag the findings they would touch; a finding is stable only when every one of its places is in a stable area.",
+  "fixture": "tally",
+  "futures": {
+    "product": "Tally",
+    "futures": [
+      { "id": "F2", "title": "Stripe as a second payment provider", "likelihood": "medium", "source": "interview", "keywords": ["PaymentGateway"] },
+      { "id": "F4", "title": "Accountant logins", "likelihood": "high", "source": "interview", "areas": ["Tally.Api/CustomersController.cs"] }
+    ],
+    "stable": [ { "reason": "Bank file layouts are fixed by the bank's published spec", "areas": ["Tally.Billing/BankFile.cs"] } ]
+  },
+  "expect": [
+    { "rule": "CNE01", "titleContains": "Connect", "future": "F2", "why": "keyword matches the type name" },
+    { "rule": "CNM01", "groupKey": "str|accountant|role", "future": "F4", "why": "area glob matches one of its places" },
+    { "rule": "CNP03", "titleContains": "parts", "stable": true, "why": "every place is in BankFile.cs" },
+    { "rule": "CNA02", "titleContains": "dd/MM/yyyy", "stable": false, "why": "only one of its three places is in the stable file" }
+  ],
+  "forbid": [ { "rule": "CNT01", "future": "F4" } ]
+}

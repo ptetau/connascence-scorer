@@ -54,6 +54,9 @@ Most products of a given type grow the same way. Pick the list that fits and kee
 
 ## 4. Rate each future
 
+Likelihood is always one of `high`, `medium` or `low`.
+
+
 - **high:** the spec or roadmap mentions it, there are TODOs for it, the hot files point at it, or it's the standard next step for this product at this stage.
 - **medium:** common for this kind of product, nothing against it.
 - **low:** plausible, but no signals. Keep few of these.
@@ -62,9 +65,9 @@ Give a horizon when you can ("next quarter", "within a year", "1-2 years").
 
 ## 5. Tie each future to code
 
-Each future needs `areas` (path globs from the repo root) and/or `keywords` (type names, concept words) that pick out the code it would touch. Be concrete. "Second payment provider" → `["src/**/Payments/**"]` and `["PaymentClient", "Charge"]`. A future that matches nothing can't inform the review, unless it is genuinely all new code (say so in its description).
+Each future needs `areas` (path globs from the repo root) and/or `keywords` (type names, concept words) that pick out the code it would touch. Be concrete. "Second payment provider" → `["src/**/Payments/**"]` and `["PaymentClient", "Charge"]`. Prefer type, member and file names over common words: `Status`, `Items`, `Create` or `Table` match half the code base, so use them only when that word is the subject of the change (statuses growing). A future that matches nothing can't inform the review, unless it is genuinely all new code (say so in its description).
 
-Also list **stable** areas you are confident won't change: generated code, a fixed external file format, settled legacy modules. Findings that sit entirely in a stable area and touch no future are ranked lower.
+Also list **stable** areas you are confident won't change: generated code, a fixed external file format, settled legacy modules. Findings that sit entirely in a stable area and touch no future are ranked lower. Don't mark an area stable if one of your futures expects part of it to change: narrow the stable entry to the part that won't (for example `"keywords": ["DirectCreditLine"]` instead of the whole file).
 
 ## 6. Write the file
 

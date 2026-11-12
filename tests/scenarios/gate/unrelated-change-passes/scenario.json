@@ -1,0 +1,12 @@
+{
+  "description": "With a baseline, a commit that edits a file full of old debt, without making any of it worse, passes.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "replace": "Tally.Api/CustomersController.cs", "old": "Your first invoice is on us.", "new": "Send your first invoice in under a minute." },
+    { "replace": "Tally.Api/InvoicesController.cs", "old": "public InvoicesController(InvoiceService service) { _service = service; }", "new": "public InvoicesController(InvoiceService service)\n        {\n            _service = service;\n        }" },
+    { "stage": true },
+    { "label": "check --staged passes", "run": ["check", "--staged"], "exit": 0 }
+  ]
+}

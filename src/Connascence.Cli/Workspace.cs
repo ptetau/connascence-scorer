@@ -41,7 +41,7 @@ namespace Connascence.Cli
         };
 
         static readonly Regex TestPath = new Regex(
-            @"(^|/)(tests?|specs?|__tests__|testing)(/|$)|[.](Tests?|Specs?|IntegrationTests|UnitTests)(/|$)|(Tests?|Specs?)\.cs$|[._-](test|spec)\.[a-z]+$|(^|/)test_[^/]*\.py$|_test\.(go|py|rb)$",
+            @"(^|/)(tests?|specs?|__tests__|testing)(/|$)|[.](Tests?|Specs?|IntegrationTests|UnitTests)(/|$)|(Tests?|Specs?)\.cs$|[._-](test|spec)\.[a-z]+$|(^|/)test_[^/]*\.py$|_test\.(go|py|rb)$|(^|/)[A-Za-z0-9]*(Mock|Fake|Stub)[A-Za-z0-9]*\.[a-z]+$|(^|/)(mocks?|fakes?|stubs?)(/|$)",
             RegexOptions.IgnoreCase);
 
         public static AnalysisResult Analyze(string root, Config config, string modeOverride, bool useGit)
@@ -95,6 +95,7 @@ namespace Connascence.Cli
                 result.Warnings.AddRange(ctx.Warnings);
             }
             if (generic.Count > 0) result.Findings.AddRange(GenericEngine.Analyze(generic, settings));
+            if (csharp.Count > 0 && generic.Count > 0) result.Findings = CrossLanguage.Merge(result.Findings, settings);
             result.CSharpFiles = csharp.Count;
             result.GenericFiles = generic.Count;
 

@@ -1,0 +1,11 @@
+{
+  "description": "The bank now accepts 64-character references, so the 40-character limit goes up. Three checks must move together.",
+  "fixture": "tally",
+  "edits": [
+    { "file": "Tally.Domain/Invoice.cs", "old": "Reference.Length > 40", "new": "Reference.Length > 64" },
+    { "file": "Tally.Billing/InvoiceService.cs", "old": "invoice.Reference.Length > 40", "new": "invoice.Reference.Length > 64" },
+    { "file": "Tally.Api/InvoicesController.cs", "old": "request.Reference.Length > 40", "new": "request.Reference.Length > 64" }
+  ],
+  "predictedBy": [ { "rule": "CNV02", "groupKey": "limit|40|length" } ],
+  "filesCovered": [ { "files": ["Tally.Domain/Invoice.cs", "Tally.Billing/InvoiceService.cs", "Tally.Api/InvoicesController.cs"] } ]
+}

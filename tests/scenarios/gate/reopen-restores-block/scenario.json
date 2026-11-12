@@ -1,0 +1,15 @@
+{
+  "description": "Reopening an accepted finding makes the gate fail on it again.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "write": "Tally.Api/Reminders.cs", "content": "namespace Tally.Api\n{\n    public class Reminders\n    {\n        public bool Due(Tally.Domain.Invoice invoice) => invoice.Status == 3;\n    }\n}\n" },
+    { "stage": true },
+    { "remember": "status", "finding": { "rule": "CNM01", "groupKey": "num|3|status" } },
+    { "label": "accept", "decide": "accept", "id": "status", "reason": "Planned as its own change" },
+    { "label": "passes while accepted", "run": ["check", "--staged"], "exit": 0 },
+    { "label": "reopen", "reopenId": "status" },
+    { "label": "blocked after reopen", "run": ["check", "--staged"], "exit": 1 }
+  ]
+}

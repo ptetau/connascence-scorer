@@ -84,6 +84,7 @@ namespace Connascence.CSharp
         {
             // 1. Find mutable static fields and properties.
             var candidates = new Dictionary<ISymbol, SyntaxToken>(SymbolEqualityComparer.Default);
+            var collections = new HashSet<ISymbol>(SymbolEqualityComparer.Default);   // changed through calls (Add, indexers), not assignment
             foreach (var root in ctx.Roots)
             {
                 var model = ctx.Model(root.SyntaxTree);
@@ -95,7 +96,9 @@ namespace Connascence.CSharp
                     foreach (var v in field.Declaration.Variables)
                     {
                         var s = model.GetDeclaredSymbol(v);
-                        if (s != null) candidates[s] = v.Identifier;
+                        if (s == null) continue;
+                        candidates[s] = v.Identifier;
+                        if (IsMutableCollection(field.Declaration.Type)) collections.Add(s);
                     }
                 }
                 foreach (var prop in root.DescendantNodes().OfType<PropertyDeclarationSyntax>())
@@ -105,7 +108,9 @@ namespace Connascence.CSharp
                     bool mutable = setter != null && !setter.Modifiers.Any(SyntaxKind.PrivateKeyword) || IsMutableCollection(prop.Type);
                     if (!mutable) continue;
                     var s = model.GetDeclaredSymbol(prop);
-                    if (s != null) candidates[s] = prop.Identifier;
+                    if (s == null) continue;
+                    candidates[s] = prop.Identifier;
+                    if (IsMutableCollection(prop.Type)) collections.Add(s);
                 }
             }
             if (candidates.Count == 0) yield break;
@@ -129,6 +134,8 @@ namespace Connascence.CSharp
             foreach (var kv in uses)
             {
                 var symbol = kv.Key;
+                // A scalar that is never assigned after its declaration is a missing readonly, not state anyone shares.
+                if (!collections.Contains(symbol) && !kv.Value.Any(IsWrite)) continue;
                 var useLocs = kv.Value.Select(n => ctx.Locate(n, "use")).GroupBy(l => l.Anchor).Select(g => g.First()).ToList();
                 if (useLocs.Count < 2) continue;
                 var locs = new List<CodeLocation> { ctx.Locate(candidates[symbol], "declaration") };
@@ -150,6 +157,21 @@ namespace Connascence.CSharp
                     ChangeProbe = "If you ever need two of these (per tenant, per request, per test) or run work in parallel, every place that touches it must change. Is that plausible?",
                 };
             }
+        }
+
+        /// <summary>x = ..., x += ..., x++, --x, ref x, out x.</summary>
+        static bool IsWrite(SyntaxNode id)
+        {
+            SyntaxNode n = id;
+            if (n.Parent is MemberAccessExpressionSyntax ma && ma.Name == n) n = ma;
+            switch (n.Parent)
+            {
+                case AssignmentExpressionSyntax a: return a.Left == n;
+                case PrefixUnaryExpressionSyntax pre: return pre.IsKind(SyntaxKind.PreIncrementExpression) || pre.IsKind(SyntaxKind.PreDecrementExpression);
+                case PostfixUnaryExpressionSyntax _: return true;
+                case ArgumentSyntax arg: return arg.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) || arg.RefKindKeyword.IsKind(SyntaxKind.OutKeyword);
+            }
+            return false;
         }
 
         static bool IsMutableCollection(TypeSyntax type)

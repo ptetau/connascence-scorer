@@ -1,0 +1,8 @@
+{
+  "description": "Control: marketing changes the welcome message. One string in one place. No finding should claim this change.",
+  "fixture": "tally",
+  "edits": [
+    { "file": "Tally.Api/CustomersController.cs", "old": "Your first invoice is on us.", "new": "Send your first invoice in under a minute." }
+  ],
+  "expectNoPrediction": true
+}

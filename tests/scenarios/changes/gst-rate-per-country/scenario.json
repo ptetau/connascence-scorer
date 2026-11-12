@@ -1,0 +1,27 @@
+{
+  "description": "Australian customers: GST becomes 10% for AU businesses. The GST calculation was copied into the API's preview, so both copies change.",
+  "fixture": "tally",
+  "edits": [
+    {
+      "file": "Tally.Billing/InvoiceService.cs",
+      "old": "Math.Round(net * 0.15m, 2, MidpointRounding.AwayFromZero)",
+      "new": "Math.Round(net * GstRates.For(invoice), 2, MidpointRounding.AwayFromZero)"
+    },
+    {
+      "file": "Tally.Api/InvoicesController.cs",
+      "old": "Math.Round(net * 0.15m, 2, MidpointRounding.AwayFromZero)",
+      "new": "Math.Round(net * GstRates.For(invoice), 2, MidpointRounding.AwayFromZero)"
+    }
+  ],
+  "predictedBy": [
+    {
+      "rule": "CNA01",
+      "why": "the copied GST calculation"
+    },
+    {
+      "titleContains": "0.15",
+      "why": "the rate itself appears in two places",
+      "gap": "A magic number used in arithmetic (not compared or assigned to a named thing) isn't collected, so the repeated 0.15 isn't linked either."
+    }
+  ]
+}

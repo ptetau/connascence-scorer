@@ -1,0 +1,8 @@
+{
+  "description": "Mutable statics shared across projects tie every user to one instance. A readonly field holding a mutable dictionary is still shared mutable state.",
+  "expect": [
+    { "rule": "CNI01", "titleContains": "CurrentUser", "distance": "CrossProject" },
+    { "rule": "CNI01", "titleContains": "Counters", "distance": "CrossProject", "why": "readonly only protects the reference; the dictionary's contents are shared and written from two projects" }
+  ],
+  "forbid": [ { "rule": "CNI01", "titleContains": "Product", "why": "static readonly string is immutable" } ]
+}

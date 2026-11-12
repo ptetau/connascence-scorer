@@ -1,0 +1,185 @@
+{
+  "description": "Every coupling planted in the Tally fixture is found, and the look-alikes that are fine are not. This is the precision and recall check on realistic code.",
+  "fixture": "tally",
+  "expect": [
+    {
+      "rule": "CNM01",
+      "groupKey": "num|3|status",
+      "minDegree": 6,
+      "distance": "CrossProject",
+      "files": [
+        "Tally.Domain/Invoice.cs",
+        "Tally.Billing/InvoiceService.cs",
+        "Tally.Api/InvoicesController.cs"
+      ],
+      "why": "status 3 means 'sent' in three projects"
+    },
+    {
+      "rule": "CNM01",
+      "groupKey": "num|4|status",
+      "files": [
+        "Tally.Billing/InvoiceService.cs",
+        "Tally.Api/WebhookController.cs"
+      ],
+      "why": "status 4 means 'paid'"
+    },
+    {
+      "rule": "CNM01",
+      "groupKey": "num|5|status",
+      "why": "status 5 means 'overdue'"
+    },
+    {
+      "rule": "CNM01",
+      "groupKey": "str|accountant|role",
+      "degree": 2,
+      "why": "role string checked in two controllers"
+    },
+    {
+      "rule": "CNM02",
+      "titleContains": "Send",
+      "degree": 3,
+      "files": [
+        "Tally.Api/InvoicesController.cs",
+        "Tally.Billing/InvoiceService.cs"
+      ],
+      "why": "Send(invoice, true): three positional flags; the named one is not counted"
+    },
+    {
+      "rule": "CNV01",
+      "titleContains": "MaxNameLength",
+      "distance": "CrossProject",
+      "why": "same limit defined in Customer and CustomerRequest"
+    },
+    {
+      "rule": "CNV02",
+      "groupKey": "limit|40|length",
+      "degree": 3,
+      "why": "reference length 40 checked in three projects"
+    },
+    {
+      "rule": "CNP01",
+      "titleContains": "CreateInvoice",
+      "why": "5 parameters, two strings and two decimals, called by position"
+    },
+    {
+      "rule": "CNP02",
+      "titleContains": "CalculateTotals",
+      "why": "3-part tuple unpacked by position in the API"
+    },
+    {
+      "rule": "CNP03",
+      "titleContains": "parts",
+      "files": [
+        "Tally.Billing/BankFile.cs"
+      ],
+      "why": "bank CSV read by column index"
+    },
+    {
+      "rule": "CNA02",
+      "titleContains": "dd/MM/yyyy",
+      "why": "date format written out in several places"
+    },
+    {
+      "rule": "CNA03",
+      "titleContains": "SHA256",
+      "files": [
+        "Tally.Api/WebhookController.cs",
+        "Tally.Billing/PaymentGateway.cs"
+      ],
+      "why": "signing and verifying must use the same hash"
+    },
+    {
+      "rule": "CNE01",
+      "titleContains": "Connect",
+      "why": "Charge throws unless Connect ran first"
+    },
+    {
+      "rule": "CNT01",
+      "titleContains": "Thread.Sleep(2000)",
+      "why": "fixed retry delay"
+    },
+    {
+      "rule": "CNI01",
+      "titleContains": "InvoiceCache.Items",
+      "minDegree": 5,
+      "distance": "CrossProject",
+      "why": "static mutable cache written and read across projects"
+    },
+    {
+      "rule": "GNT01",
+      "titleContains": "time.sleep(30)",
+      "why": "fixed retry delay in the Python job"
+    },
+    {
+      "rule": "CNM01",
+      "groupKey": "num|3|status",
+      "files": [
+        "web/invoice-list.js",
+        "scripts/overdue_report.py"
+      ],
+      "minDegree": 9,
+      "why": "the web front end and the Python job compare the same status code; it joins the C# finding"
+    },
+    {
+      "rule": "CNA01",
+      "anyFile": [
+        "Tally.Api/InvoicesController.cs"
+      ],
+      "why": "GST calculation copied from InvoiceService.CalculateTotals into InvoicesController.Preview"
+    },
+    {
+      "rule": "CNM01",
+      "groupKey": "num|5|status",
+      "files": [
+        "scripts/overdue_report.py",
+        "web/invoice-list.js",
+        "Tally.Domain/Invoice.cs"
+      ],
+      "why": "status 5 in the Python job (row[\"status\"]), the JS and the C# is one coupling"
+    },
+    {
+      "rule": "CNM01",
+      "groupKey": "num|1|status",
+      "why": "status 1 means 'draft', compared and assigned in several places"
+    }
+  ],
+  "forbid": [
+    {
+      "anyFile": [
+        "Tally.Api/Migrations/20240101_Initial.cs"
+      ],
+      "why": "migrations are excluded"
+    },
+    {
+      "anyFile": [
+        "Tally.Billing.Tests/InvoiceServiceTests.cs"
+      ],
+      "why": "tests are excluded by default"
+    },
+    {
+      "rule": "CNP01",
+      "titleContains": "Schedule",
+      "why": "four parameters, all different types"
+    },
+    {
+      "rule": "CNV01",
+      "titleContains": "TableName",
+      "why": "same name, different values: not a shared constant"
+    },
+    {
+      "rule": "CNI01",
+      "titleContains": "Currencies",
+      "why": "static readonly array that is never written"
+    },
+    {
+      "rule": "CNM01",
+      "titleContains": "20",
+      "why": "20 days appears once as a default and once as an argument: different subjects"
+    },
+    {
+      "rule": "CNM02",
+      "titleContains": "ConfigureAwait",
+      "why": "framework calls are not ours to fix"
+    }
+  ]
+}

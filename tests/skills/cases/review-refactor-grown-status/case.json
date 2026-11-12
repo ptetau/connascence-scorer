@@ -1,0 +1,146 @@
+{
+  "skill": "connascence-review",
+  "description": "The staged change adds a reminders endpoint that compares Status with 3 and 5 again, growing coupling a high-likelihood future (F1: statuses grow) will hit. It also adds two more uses of the static InvoiceCache, which no future touches. Expected: refactor the status coupling (small, in scope), decide the cache growth with a reason, log both, commit with the hook running.",
+  "futures": {
+    "product": "Tally",
+    "updated": "2026-10-01T00:00:00Z",
+    "futures": [
+      {
+        "id": "F1",
+        "title": "Invoice statuses grow (partially paid, viewed)",
+        "description": "Support asks every week for partially paid invoices. Each new status touches every status check.",
+        "likelihood": "high",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "Status"
+        ]
+      },
+      {
+        "id": "F2",
+        "title": "Australian customers: 10% GST and AUD",
+        "description": "First non-NZ market. Tax rate and currency per business.",
+        "likelihood": "high",
+        "horizon": "within a year",
+        "source": "interview",
+        "keywords": [
+          "Gst",
+          "NZD",
+          "Currency"
+        ],
+        "areas": [
+          "Tally.Billing/InvoiceService.cs"
+        ]
+      },
+      {
+        "id": "F3",
+        "title": "Stripe as a second payment provider",
+        "description": "Only if Windcave raises fees.",
+        "likelihood": "medium",
+        "horizon": "within a year",
+        "source": "interview",
+        "keywords": [
+          "PaymentGateway",
+          "Charge",
+          "Webhook"
+        ]
+      },
+      {
+        "id": "F4",
+        "title": "Accountant logins with read access",
+        "description": "Accountants see their clients' invoices.",
+        "likelihood": "medium",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "role",
+          "accountant"
+        ]
+      }
+    ],
+    "stable": [
+      {
+        "reason": "Bank file layouts (statement CSV and direct credit) are fixed by the bank's published spec",
+        "areas": [
+          "Tally.Billing/BankFile.cs"
+        ]
+      }
+    ]
+  },
+  "agentsSnippet": true,
+  "stage": true,
+  "writes": [
+    {
+      "file": "Tally.Api/RemindersController.cs",
+      "content": "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing Tally.Billing;\nusing Tally.Domain;\n\nnamespace Tally.Api\n{\n    // Lists invoices that need a reminder.\n    public class RemindersController\n    {\n        public IEnumerable<Invoice> DueToday(DateTime today)\n        {\n            return InvoiceCache.Items.Values.Where(i => i.Status == 3 && i.Due.Date == today.Date);\n        }\n\n        public IEnumerable<Invoice> Overdue()\n        {\n            return InvoiceCache.Items.Values.Where(i => i.Status == 5);\n        }\n    }\n}\n"
+    }
+  ],
+  "prompt": "I've staged a small reminders endpoint (Tally.Api/RemindersController.cs). Please commit it with a sensible message.",
+  "checks": [
+    {
+      "type": "command_ran",
+      "label": "ran the connascence tool",
+      "pattern": "connascence (check|analyze|decide)|git commit"
+    },
+    {
+      "type": "skill_used",
+      "label": "used the review skill",
+      "skill": "connascence-review"
+    },
+    {
+      "type": "decision",
+      "label": "logged a refactor of the status-3 coupling",
+      "choice": "refactor",
+      "rule": "CNM01",
+      "titlePattern": "Magic value 3"
+    },
+    {
+      "type": "no_decision",
+      "label": "did not accept the status-3 coupling",
+      "choice": "accept",
+      "rule": "CNM01",
+      "titlePattern": "Magic value 3"
+    },
+    {
+      "type": "finding",
+      "label": "status 3 no longer grows (9 places or fewer, its baseline across C#, Python and JS)",
+      "rule": "CNM01",
+      "groupKey": "num|3|status",
+      "maxDegree": 9
+    },
+    {
+      "type": "gate_passes",
+      "label": "connascence check passes on everything since the start"
+    },
+    {
+      "type": "committed",
+      "label": "committed, with the hook running"
+    },
+    {
+      "type": "untouched",
+      "label": "left unrelated code alone",
+      "patterns": [
+        "^Tally\\.Billing/BankFile\\.cs$",
+        "^scripts/",
+        "^web/",
+        "^Tally\\.Billing/PaymentGateway\\.cs$"
+      ]
+    },
+    {
+      "type": "files_committed",
+      "label": "committed the acceptance and decision log with the change",
+      "paths": [
+        ".connascence/accepted.json",
+        ".connascence/log/decisions.jsonl"
+      ]
+    }
+  ],
+  "rubric": [
+    "Ran the connascence check and read the findings (cause, change probe, futures) before deciding.",
+    "Refactored the status coupling the new code added, because F1 (high likelihood) would force edits in several places; did not accept it to get past the gate.",
+    "The refactor is small and readable and stays within the reminders change; it does not rewrite unrelated baseline code without saying why.",
+    "Handled every blocking finding, including the growth of the shared InvoiceCache state, with a refactor or an accept whose reason names the change considered.",
+    "Logged each decision with `connascence decide`; reasons name the change considered and the future id where one applies.",
+    "Finished with a short report (id, finding, decision, reason, future) and named anything it was unsure about."
+  ]
+}

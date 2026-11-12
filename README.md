@@ -72,7 +72,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | CNV02 | Value | The same limit checked in several places (`Length > 50`) |
 | CNI01 | Identity | Mutable static state used from several members |
 
-Tests are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations are excluded.
+Tests, and mocks, fakes and stubs (`BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations are excluded.
 
 ## Generic mode
 
@@ -130,12 +130,16 @@ dotnet_diagnostic.CNM01.severity = suggestion
 ```sh
 dotnet build                                    # needs nuget.org for Microsoft.CodeAnalysis.CSharp
 dotnet run --project tests/Connascence.Tests    # unit tests
+python3 tests/scenarios/run.py                  # detection, change-prediction and gate scenarios
 tests/e2e.sh                                    # full workflow in a throwaway git repo (needs connascence on PATH)
+python3 tests/skills/run.py                     # skill evals: real Claude Code sessions, graded (costs API usage)
 dotnet pack src/Connascence.Cli                 # the dotnet tool
 dotnet pack src/Connascence.Analyzers           # the analyzer package
 ```
 
 Offline, build against the Roslyn that ships inside the .NET SDK: `dotnet build -p:UseSdkRoslyn=true -p:RestoreSources=<empty folder>`. That works for the CLI and tests. The analyzer then has to target `net8.0` (`-p:AnalyzerTfm=net8.0`), which runs in `dotnet build` but not in Visual Studio.
+
+See `tests/scenarios/README.md` and `tests/skills/README.md` for what those suites check.
 
 ## Known limits
 

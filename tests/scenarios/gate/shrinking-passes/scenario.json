@@ -1,0 +1,12 @@
+{
+  "description": "A refactor that removes places from baseline coupling passes, even though the finding's id changed.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "replace": "Tally.Domain/Invoice.cs", "old": "public bool IsOutstanding() => Status == 3 || Status == 5;", "new": "public const int Sent = 3, Overdue = 5;\n\n        public bool IsOutstanding() => Status == Sent || Status == Overdue;" },
+    { "stage": true },
+    { "label": "finding shrank", "expectFinding": { "rule": "CNM01", "groupKey": "num|3|status", "degree": 8 } },
+    { "label": "check --staged passes", "run": ["check", "--staged"], "exit": 0 }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "The same status code in a C# service and a Python script that reads the same database.",
+  "expect": [
+    {
+      "rule": "CNM01",
+      "groupKeyStartsWith": "num|6|",
+      "why": "found within the C# code"
+    },
+    {
+      "anyFile": [
+        "scripts/nightly.py"
+      ],
+      "titleContains": "6",
+      "why": "found within the script"
+    },
+    {
+      "files": [
+        "Api/Orders.cs",
+        "scripts/nightly.py"
+      ],
+      "why": "one finding links both sides, so a change to status 6 shows every place"
+    }
+  ]
+}

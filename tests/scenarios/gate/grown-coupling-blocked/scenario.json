@@ -1,0 +1,11 @@
+{
+  "description": "Adding one more place to existing baseline coupling (status 3) is blocked and labelled as growth, not as new.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "write": "Tally.Api/Reminders.cs", "content": "namespace Tally.Api\n{\n    public class Reminders\n    {\n        public bool Due(Tally.Domain.Invoice invoice) => invoice.Status == 3;\n    }\n}\n" },
+    { "stage": true },
+    { "label": "check --staged fails with 'grew from 9 to 10 places'", "run": ["check", "--staged"], "exit": 1, "contains": ["grew from 9 to 10 places", "Magic value 3"] }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Decisions must carry a reason, and must name a finding that exists.",
+  "fixture": "tally",
+  "steps": [
+    { "label": "accept without --reason is refused", "decide": "accept", "finding": { "rule": "CNT01" }, "reason": null, "exit": 2 },
+    { "label": "accept with a blank reason is refused", "decide": "accept", "finding": { "rule": "CNT01" }, "reason": "  ", "exit": 2 },
+    { "label": "accept of an unknown id is refused", "run": ["decide", "0000000000", "accept", "--reason", "x"], "noGit": false, "exit": 2, "contains": ["No current finding"] },
+    { "label": "accept with a reason works", "decide": "accept", "finding": { "rule": "CNT01" }, "reason": "Windcave asks for a 2s back-off; one call site" },
+    { "label": "finding is now accepted", "expectFinding": { "rule": "CNT01", "accepted": true } }
+  ]
+}

@@ -1,0 +1,111 @@
+{
+  "description": "Roadmap item: show when a customer has viewed an invoice. 'Sent' (3) splits into Sent (3) and Viewed (6). Everything that treats an invoice as sent or outstanding must now accept both.",
+  "fixture": "tally",
+  "futures": {
+    "product": "Tally",
+    "futures": [
+      {
+        "id": "F1",
+        "title": "Invoice statuses grow (viewed, partially paid)",
+        "likelihood": "high",
+        "source": "interview",
+        "keywords": [
+          "Status"
+        ]
+      },
+      {
+        "id": "F2",
+        "title": "Stripe as a second payment provider",
+        "likelihood": "medium",
+        "source": "interview",
+        "keywords": [
+          "PaymentGateway",
+          "Charge"
+        ]
+      },
+      {
+        "id": "F3",
+        "title": "Accountant logins",
+        "likelihood": "medium",
+        "source": "interview",
+        "keywords": [
+          "role"
+        ]
+      }
+    ]
+  },
+  "edits": [
+    {
+      "file": "Tally.Domain/Invoice.cs",
+      "old": "public bool IsOutstanding() => Status == 3 || Status == 5;",
+      "new": "public bool IsOutstanding() => Status == 3 || Status == 6 || Status == 5;"
+    },
+    {
+      "file": "Tally.Billing/InvoiceService.cs",
+      "old": "if (invoice.Status == 3) _mailer",
+      "new": "if (invoice.Status == 3 || invoice.Status == 6) _mailer"
+    },
+    {
+      "file": "Tally.Billing/InvoiceService.cs",
+      "old": "i => i.Status == 3 && i.Due < today",
+      "new": "i => (i.Status == 3 || i.Status == 6) && i.Due < today"
+    },
+    {
+      "file": "Tally.Api/InvoicesController.cs",
+      "old": "Where(i => i.Status == 3 || i.Status == 5)",
+      "new": "Where(i => i.Status == 3 || i.Status == 6 || i.Status == 5)"
+    },
+    {
+      "file": "Tally.Api/InvoicesController.cs",
+      "old": "                case 3: return \"Sent\";\n",
+      "new": "                case 3: return \"Sent\";\n                case 6: return \"Viewed\";\n"
+    },
+    {
+      "file": "web/invoice-list.js",
+      "old": "if (invoice.status === 3) return \"badge-amber\";",
+      "new": "if (invoice.status === 3 || invoice.status === 6) return \"badge-amber\";"
+    },
+    {
+      "file": "web/invoice-list.js",
+      "old": "return invoice.status === 3 || invoice.status === 5;",
+      "new": "return invoice.status === 3 || invoice.status === 6 || invoice.status === 5;"
+    },
+    {
+      "file": "scripts/overdue_report.py",
+      "old": "if i[\"status\"] == 3]",
+      "new": "if i[\"status\"] in (3, 6)]"
+    }
+  ],
+  "predictedBy": [
+    {
+      "rule": "CNM01",
+      "groupKey": "num|3|status",
+      "why": "status 3 is compared in every place that had to change"
+    }
+  ],
+  "filesCovered": [
+    {
+      "files": [
+        "Tally.Domain/Invoice.cs",
+        "Tally.Billing/InvoiceService.cs",
+        "Tally.Api/InvoicesController.cs"
+      ],
+      "why": "the C# side of the change"
+    },
+    {
+      "files": [
+        "web/invoice-list.js",
+        "scripts/overdue_report.py"
+      ],
+      "why": "the front end and the nightly script also had to change"
+    }
+  ],
+  "rank": {
+    "top": 3,
+    "finding": {
+      "rule": "CNM01",
+      "groupKey": "num|3|status"
+    },
+    "why": "a high-likelihood future touches it"
+  }
+}

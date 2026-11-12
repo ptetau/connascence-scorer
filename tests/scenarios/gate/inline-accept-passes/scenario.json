@@ -1,0 +1,13 @@
+{
+  "description": "An inline accept comment on a flagged line accepts the finding, so the commit passes.",
+  "fixture": "tally",
+  "steps": [
+    { "baseline": true },
+    { "commit": "baseline" },
+    { "write": "Tally.Billing/Refunds.cs", "content": "using System.Collections.Generic;\nnamespace Tally.Billing\n{\n    public static class RefundQueue\n    {\n        // connascence: accept - single-instance by design until the queue moves to the database (F2)\n        public static List<string> Pending = new List<string>();\n    }\n\n    public class Refunds\n    {\n        public void Request(string invoiceId) { RefundQueue.Pending.Add(invoiceId); }\n        public void Clear() { RefundQueue.Pending.Clear(); }\n    }\n}\n" },
+    { "write": "Tally.Api/RefundsController.cs", "content": "namespace Tally.Api\n{\n    public class RefundsController\n    {\n        public int Waiting() => Tally.Billing.RefundQueue.Pending.Count;\n    }\n}\n" },
+    { "stage": true },
+    { "label": "finding is marked accepted", "expectFinding": { "rule": "CNI01", "titleContains": "RefundQueue", "accepted": true } },
+    { "label": "check --staged passes", "run": ["check", "--staged"], "exit": 0 }
+  ]
+}

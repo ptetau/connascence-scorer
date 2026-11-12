@@ -28,7 +28,7 @@ Ask:
 
 ## 2. Which axes are plausible
 
-Show only the axes that apply, pre-filled with what you found ("Today: one Postgres database. Next step might be: database-agnostic or a second store"). Ask the owner to mark each: **likely**, **maybe**, **no**. Always add: "Anything on your roadmap I haven't listed?"
+Show only the axes that apply, pre-filled with what you found ("Today: one Postgres database. Next step might be: database-agnostic or a second store"). Ask the owner to mark each: **likely**, **maybe**, **no**. Always add: "Anything on your roadmap I haven't listed?" An axis marked **no** gets no future, not a low one, and an existing future the owner rules out is removed (check the decision log first; if a decision cites it, mark it low and say why).
 
 Good prompts, matched to what you found:
 
@@ -52,7 +52,7 @@ Ask: "Which parts do you expect to stay put?" Offer what you found: generated co
 
 Turn the answers into futures:
 
-1. **Owner-stated futures** (`"source": "interview"`): one per likely axis or roadmap item. Likelihood: likely → high, maybe → medium.
+1. **Owner-stated futures** (`"source": "interview"`): one per likely axis or roadmap item. Likelihood: likely → high, maybe → medium, "not sure" → low (and say so in the description). Use only `high`, `medium` or `low`.
 2. **Derived futures** (`"source": "derived"`): the predictable sub-changes that come with each one. Examples:
    - Team use → accounts and roles, invitations, permissions checks, audit trail, per-user settings.
    - Multi-instance → no in-memory state, shared cache, idempotent background jobs, sticky-session removal.
@@ -67,7 +67,7 @@ Turn the answers into futures:
 
 ## 6. Confirm and write
 
-Show the owner a compact list: id, title, likelihood, horizon, and the code it touches. Ask for corrections once. Then write `.connascence/futures.json` (schema in the explore skill) and save the interview notes, in the owner's words, to `.connascence/futures-interview.md` with today's date.
+Show the owner a compact list: id, title, likelihood, horizon, and the code it touches. Ask for corrections once. Write what they confirmed; if you change anything after that (even narrowing areas), tell them what changed and why. Then write `.connascence/futures.json` (schema in the explore skill) and save the interview notes, in the owner's words, to `.connascence/futures-interview.md` with today's date.
 
 Keep existing ids where a future is unchanged so past accept and refactor decisions still point at the right one.
 

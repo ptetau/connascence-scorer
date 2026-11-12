@@ -1,0 +1,76 @@
+{
+  "skill": "connascence-futures-explore",
+  "description": "An existing futures file has an owner-stated interview future (F1) and a stale explore future (F2). Expected: F1 kept exactly, ids stable, roadmap gaps filled.",
+  "futures": {
+    "product": "Tally",
+    "updated": "2025-06-01T00:00:00Z",
+    "futures": [
+      {
+        "id": "F1",
+        "title": "Partially paid invoices",
+        "description": "Owner: support asks about this every week.",
+        "likelihood": "high",
+        "horizon": "next quarter",
+        "source": "interview",
+        "keywords": [
+          "Status",
+          "AmountPaid"
+        ]
+      },
+      {
+        "id": "F2",
+        "title": "Move to PostgreSQL",
+        "description": "Guess from 2025: hosting costs.",
+        "likelihood": "low",
+        "horizon": "1-2 years",
+        "source": "explore",
+        "keywords": [
+          "SqlConnection"
+        ]
+      }
+    ],
+    "stable": []
+  },
+  "prompt": "Refresh .connascence/futures.json with the connascence-futures-explore skill. The code and roadmap have moved on since it was written.",
+  "checks": [
+    {
+      "type": "futures_preserved",
+      "label": "interview future F1 kept exactly",
+      "futures": [
+        {
+          "id": "F1",
+          "title": "Partially paid invoices",
+          "description": "Owner: support asks about this every week.",
+          "likelihood": "high",
+          "source": "interview"
+        }
+      ]
+    },
+    {
+      "type": "futures_valid",
+      "label": "well-formed, ids unique",
+      "min": 5,
+      "max": 15
+    },
+    {
+      "type": "futures_mention",
+      "label": "Australia / GST / AUD added",
+      "pattern": "(?i)austral|\\bAUD\\b|currenc|GST rate"
+    },
+    {
+      "type": "futures_mention",
+      "label": "second payment provider added",
+      "pattern": "(?i)stripe|second payment|payment provider"
+    },
+    {
+      "type": "stable_mention",
+      "label": "bank file formats marked stable",
+      "pattern": "(?i)bank|BankFile|direct.?credit"
+    }
+  ],
+  "rubric": [
+    "Kept the interview future F1 exactly as written.",
+    "Kept ids stable: updated or removed its own explore future F2 deliberately (and said which) rather than renumbering others.",
+    "Added futures for the README roadmap items that were missing, each tied to code."
+  ]
+}

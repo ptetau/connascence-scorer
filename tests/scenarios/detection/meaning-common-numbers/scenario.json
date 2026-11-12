@@ -1,0 +1,9 @@
+{
+  "description": "0, 1 and 2 are ignored as ordinary numbers, but not when they are codes: Mode == 2 in three places is a meaning to name.",
+  "expect": [ { "rule": "CNM01", "groupKey": "num|2|mode", "degree": 3 } ],
+  "forbid": [
+    { "rule": "CNM01", "groupKeyStartsWith": "num|1|", "why": "Attempts == 1 is a count, not a code" },
+    { "rule": "CNM01", "groupKeyStartsWith": "num|0|", "why": "Count == 0 is a count" },
+    { "rule": "CNM01", "groupKey": "num|2|attempts" }
+  ]
+}

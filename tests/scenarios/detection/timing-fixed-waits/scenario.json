@@ -1,0 +1,8 @@
+{
+  "description": "Fixed waits guess how long something else takes.",
+  "expect": [
+    { "rule": "CNT01", "titleContains": "1500" },
+    { "rule": "CNT01", "titleContains": "FromSeconds(3)" }
+  ],
+  "forbid": [ { "rule": "CNT01", "titleContains": "Infinite", "why": "waiting on a cancellation token is waiting on an event, not guessing a time" } ]
+}
