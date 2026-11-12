@@ -1,0 +1,11 @@
+{
+  "description": "A futures area that names a folder with a dot in it (a .NET project folder such as Tally.Billing) matches everything under it, like any other folder name.",
+  "fixture": "tally",
+  "futures": {
+    "product": "Tally",
+    "futures": [
+      { "id": "F9", "title": "Billing moves to a separate service", "likelihood": "medium", "source": "interview", "areas": ["Tally.Billing"] }
+    ]
+  },
+  "expect": [ { "rule": "CNP03", "titleContains": "parts", "future": "F9", "why": "BankFile.cs is under Tally.Billing" } ]
+}

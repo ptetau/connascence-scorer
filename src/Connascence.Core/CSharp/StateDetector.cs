@@ -47,7 +47,7 @@ namespace Connascence.CSharp
         static (string Key, Constant Constant)? NamedConstant(VariableDeclaratorSyntax v)
         {
             if (!(v.Initializer?.Value is LiteralExpressionSyntax lit)) return null;
-            var words = Text.Words(v.Identifier.Text).Where(w => w != "default").OrderBy(w => w).ToImmutableArray();
+            var words = Text.Words(v.Identifier.Text).Where(w => w != "default").OrderBy(w => w, StringComparer.Ordinal).ToImmutableArray();
             if (words.IsEmpty) return null;
             return (string.Join(" ", words), new Constant { Declarator = v, Type = CSharpContext.TypeNameOf(v), Value = lit.Token.ValueText });
         }

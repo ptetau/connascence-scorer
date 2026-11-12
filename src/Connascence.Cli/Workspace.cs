@@ -28,7 +28,8 @@ namespace Connascence.Cli
     /// <summary>Finds the files, runs the right engine for each language, and applies volatility, futures and acceptances.</summary>
     public static class Workspace
     {
-        static readonly HashSet<string> SkipDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        // Exact, case-sensitive names: "build" and "out" are output folders, but "Build/" or "Out/" may hold source.
+        static readonly HashSet<string> SkipDirs = new HashSet<string>(StringComparer.Ordinal)
         {
             ".git", ".connascence", "bin", "obj", "node_modules", "packages", "dist", "build", "out", "target", ".vs", ".idea", ".vscode",
             "vendor", "venv", ".venv", "__pycache__", ".next", ".nuxt", "coverage", "TestResults",
@@ -40,9 +41,15 @@ namespace Connascence.Cli
             "build.gradle", "build.gradle.kts", "Gemfile", "composer.json", "Package.swift", "mix.exs",
         };
 
+        // Test folders and file-name conventions, in any case: tests/, Foo.Tests/, foo.test.js, test_foo.py, foo_test.go.
         static readonly Regex TestPath = new Regex(
-            @"(^|/)(tests?|specs?|__tests__|testing)(/|$)|[.](Tests?|Specs?|IntegrationTests|UnitTests)(/|$)|(Tests?|Specs?)\.cs$|[._-](test|spec)\.[a-z]+$|(^|/)test_[^/]*\.py$|_test\.(go|py|rb)$|(^|/)[A-Za-z0-9]*(Mock|Fake|Stub)[A-Za-z0-9]*\.[a-z]+$|(^|/)(mocks?|fakes?|stubs?)(/|$)",
+            @"(^|/)(tests?|specs?|__tests__|testing)(/|$)|[.](Tests?|Specs?|IntegrationTests|UnitTests)(/|$)|[._-](test|spec)\.[a-z]+$|(^|/)test_[^/]*\.py$|_test\.(go|py|rb)$|(^|/)(mocks?|fakes?|stubs?)(/|$)",
             RegexOptions.IgnoreCase);
+
+        // Test and fake classes by name, as whole words: OrderTests.cs, BasketMockService.cs, fake_clock.py.
+        // Not Latest.cs, Contest.cs, Stubborn.cs or Hammock.cs.
+        static readonly Regex TestName = new Regex(
+            @"(^|/|[a-z0-9_])(Tests?|Specs?)\.cs$|(^|/)([A-Za-z0-9]*[a-z0-9])?(Mock|Fake|Stub)s?([A-Z0-9_][A-Za-z0-9_]*)?\.[a-z]+$|(^|/|[_-])(mock|fake|stub)s?([_-][a-z0-9_-]*)?\.[a-z]+$");
 
         public static AnalysisResult Analyze(string root, Config config, string modeOverride, bool useGit)
         {
@@ -61,7 +68,7 @@ namespace Connascence.Cli
             {
                 var rel = Path.GetRelativePath(root, path).Replace('\\', '/');
                 if (excludes.Any(r => r.IsMatch(rel))) continue;
-                if (!config.IncludeTests && TestPath.IsMatch(rel)) continue;
+                if (!config.IncludeTests && (TestPath.IsMatch(rel) || TestName.IsMatch(rel))) continue;
                 var ext = Path.GetExtension(path);
                 bool isCs = ext.Equals(".cs", StringComparison.OrdinalIgnoreCase);
                 if (!GenericEngine.SourceExtensions.Contains(ext)) continue;
@@ -146,8 +153,9 @@ namespace Connascence.Cli
                 try { files = Directory.GetFiles(dir); dirs = Directory.GetDirectories(dir); }
                 catch { continue; }
                 foreach (var f in files.OrderBy(x => x, StringComparer.Ordinal)) yield return f;
+                // Symlinked folders aren't followed: a link back up the tree would analyse the same files over and over.
                 foreach (var d in dirs.OrderByDescending(x => x, StringComparer.Ordinal))
-                    if (!SkipDirs.Contains(Path.GetFileName(d))) stack.Push(d);
+                    if (!SkipDirs.Contains(Path.GetFileName(d)) && new DirectoryInfo(d).LinkTarget == null) stack.Push(d);
             }
         }
 

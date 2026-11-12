@@ -97,9 +97,9 @@ namespace Connascence.CSharp
             rest.Length == 0 || (char.IsUpper(rest[0]) && !rest.StartsWith("Async", StringComparison.Ordinal)) || rest == "Async";
 
         static IEnumerable<Finding> FixedWaits(CSharpContext ctx) =>
-            ctx.Roots.SelectMany(root => root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            Scoring.NumberRepeats(ctx.Roots.SelectMany(root => root.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 .Select(inv => FixedWait(ctx, inv))
-                .OfType<Finding>();
+                .OfType<Finding>());
 
         static Finding? FixedWait(CSharpContext ctx, InvocationExpressionSyntax inv)
         {

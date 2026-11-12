@@ -83,7 +83,7 @@ Then write real futures with the skills (see below), and commit as normal. The h
 | CNV02 | Value | The same limit checked in several places (`Length > 50`) |
 | CNI01 | Identity | Mutable static state used from several members |
 
-Tests, and mocks, fakes and stubs (`BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`). Generated files, `bin`, `obj` and migrations (EF `Migrations/`, `migrations/`, Rails `db/migrate`, `DbScripts`, dated `2021-04-07_x.sql` and Flyway `V3__x.sql` scripts) are excluded.
+Tests, and mocks, fakes and stubs (`OrderTests.cs`, `BasketMockService.cs`, `mocks/`), are skipped by default (`includeTests`); names are matched as whole words, so `Latest.cs` and `Stubborn.cs` are analysed. Folders with these exact (case-sensitive) names are never read: `bin`, `obj`, `node_modules`, `packages`, `dist`, `build`, `out`, `target`, `vendor`, `venv`, `.venv`, `__pycache__`, `.next`, `.nuxt`, `coverage`, `TestResults` and editor folders. Symlinked folders aren't followed. Generated files and migrations (EF `Migrations/`, `migrations/`, Rails `db/migrate`, `DbScripts`, dated `2021-04-07_x.sql` and Flyway `V3__x.sql` scripts) are excluded.
 
 ## Generic mode
 

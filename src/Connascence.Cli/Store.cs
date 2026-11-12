@@ -269,8 +269,8 @@ namespace Connascence.Cli
                 else if (c == '?') sb.Append("[^/]");
                 else sb.Append(Regex.Escape(c.ToString()));
             }
-            // A glob without wildcards that names a folder matches everything under it.
-            if (!g.Contains("*") && !g.Contains("?") && !Path.HasExtension(g)) sb.Append("(?:/.*)?");
+            // A glob without wildcards matches that path and everything under it, so a folder named like "Tally.Billing" works.
+            if (!g.Contains("*") && !g.Contains("?")) sb.Append("(?:/.*)?");
             sb.Append("$");
             return new Regex(sb.ToString(), RegexOptions.IgnoreCase);
         }

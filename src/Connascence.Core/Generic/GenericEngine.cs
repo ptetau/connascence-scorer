@@ -361,11 +361,11 @@ namespace Connascence.Generic
         // ---------- Timing ----------
 
         static IEnumerable<Finding> Sleeps(IReadOnlyList<TextFile> files) =>
-            files.SelectMany(f => CodeLines(f)
+            Scoring.NumberRepeats(files.SelectMany(f => CodeLines(f)
                 .Where(cl => !IsDefinitionLine(cl.Value))
                 .Select(cl => (Line: cl, Title: WaitTitle(cl.Value)))
                 .Where(x => x.Title != null)
-                .Select(x => FixedWait(f, x.Line, x.Title!)));
+                .Select(x => FixedWait(f, x.Line, x.Title!))));
 
         /// <summary>How a fixed wait on this line reads in a title, such as "time.sleep(2)", or null if there is none.</summary>
         static string? WaitTitle(string line)

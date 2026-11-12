@@ -127,6 +127,21 @@ namespace Connascence
             };
         }
 
+        /// <summary>
+        /// Findings with the same group key get "#2", "#3" ... added to it, in order, so each has its own id (two identical
+        /// waits in one method). The first keeps its key, so existing ids don't change.
+        /// </summary>
+        public static IReadOnlyList<Finding> NumberRepeats(IEnumerable<Finding> findings) =>
+            findings.Aggregate(
+                    (Seen: ImmutableDictionary<string, int>.Empty, Out: ImmutableList<Finding>.Empty),
+                    (state, f) =>
+                    {
+                        var key = f.GroupKey ?? "";
+                        var n = (state.Seen.TryGetValue(key, out var seen) ? seen : 0) + 1;
+                        return (state.Seen.SetItem(key, n), state.Out.Add(n == 1 ? f : f with { GroupKey = key + "#" + n }));
+                    })
+                .Out;
+
         public static ScoreSummary Summarise(IReadOnlyList<Finding> findings, int lines, int files, Settings s)
         {
             var open = findings.Where(f => !f.Accepted).ToImmutableArray();
